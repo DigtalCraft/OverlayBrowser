@@ -1,0 +1,33 @@
+<Window x:Class="OverlayBrowser.Form.GeminiApiKeyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay Browser - Gemini APIキー"
+        Width="560"
+        Height="310"
+        ResizeMode="NoResize"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource MainTextBrush}"
+        FontFamily="Yu Gothic UI"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Gemini APIキー" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+        <TextBlock Grid.Row="1" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource SubTextBrush}"
+                   Text="右クリック翻訳で使用するGemini APIキーです。キーは設定ファイルではなく、Windows資格情報マネージャーへ保存されます。" />
+        <StackPanel Grid.Row="2" Margin="0,20,0,0">
+            <TextBlock Text="APIキー" Margin="0,0,0,6" />
+            <PasswordBox x:Name="ApiKeyPasswordBox" Padding="12,8" />
+            <TextBlock x:Name="StatusTextBlock" Margin="0,10,0,0" Foreground="{StaticResource AccentSecondaryBrush}" />
+        </StackPanel>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Width="94" Margin="0,0,10,0" Content="削除" Background="#243650" BorderBrush="#55738F" Click="DeleteButton_Click" />
+            <Button Width="94" Margin="0,0,10,0" Content="保存" Click="SaveButton_Click" />
+            <Button Width="94" Content="閉じる" Background="#243650" BorderBrush="#55738F" Click="CloseButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

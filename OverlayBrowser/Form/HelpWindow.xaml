@@ -1,0 +1,64 @@
+<Window x:Class="OverlayBrowser.Form.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay Browser - Help"
+        Width="760"
+        Height="660"
+        MinWidth="640"
+        MinHeight="520"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource MainTextBrush}"
+        FontFamily="Yu Gothic UI"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- 日本語と英語を同じ画面に並べ、ゲーム中に迷わず確認できるようにする。 -->
+                <TextBlock Text="使い方" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource MainTextBrush}">
+                    <Run Text="1. URL欄にサイトのアドレスを入力し、［開く］または Enter で表示します。https:// は省略できます。上部の［＋］または［ブラウザ］→［新しいタブ］で別サイト用のタブを追加し、タブ右側の［×］で閉じられます。タブ数の固定上限はありません。［ブラウザ］→［ホームを開く］またはホームアイコンで、登録済みのホーム画面を開けます。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="2. ［ブックマーク］→［このページをブックマークに追加］で、今表示しているページを保存します。同じメニューの［現在のページをホームページに設定］で、起動時とホームアイコンで開くURLを指定できます。保存済みのサイトはフォルダを折りたためるツリーから選べます。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="3. ［ブックマーク整理］→［Chromeからインポート］または［Edgeからインポート］で、各ブラウザの既定プロファイルにあるブックマークを追加します。別のプロファイルやバックアップは［HTMLファイルからインポート］を使います。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="4. ［ブックマーク整理］→［Chrome / Edge 用HTMLへエクスポート］で保存したHTMLファイルは、ChromeとEdgeのブックマーク管理画面から取り込めます。保存済みのブックマークをすべて消す操作も［ブックマーク整理］にあります。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="5. ［設定］→［常に前面に表示］でゲームの上に表示します。透明度は上部のスライダーで35〜100%に調整できます。ゲーム側はウィンドウ表示またはボーダーレス表示で使うと安定します。右下の紫色の目印をドラッグすると、ウィンドウサイズを変えられます。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="6. ［設定］→［Windowsの起動時にタスクトレイへ常駐］をオンにすると、次回Windowsへサインインした時は画面を開かずにタスクトレイへ常駐します。トレイのアイコンを右クリックすると［表示］［ヘルプ / Help］［終了］を選べます。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="7. 右上の［×］や Alt + F4 はアプリを終了せず、画面を隠してタスクトレイへ常駐します。完全に終了する時はメニューバーの［終了］またはトレイの［終了］を選び、確認画面で［はい / Yes］を選択します。" />
+                    <LineBreak /><LineBreak />
+                    <Run Text="8. Webページ上で右クリックし、［ページを翻訳］を選ぶと、現在のタブをGoogle翻訳のページ翻訳表示へ切り替えられます。元のレイアウトのまま文章だけをGeminiで置き換えたい時は［Geminiでページを翻訳］を選びます。Gemini翻訳後に元へ戻す時は再読み込みします。初回は［設定］→［Gemini APIキー］でGoogle AI StudioのGemini APIキーを登録してください。［設定］→［翻訳のカスタマイズ］では、文体、説明の詳しさ、ゲーム用語の扱いを指定できます。詳細は［ヘルプ］→［翻訳のHelp / Translation Help］で確認できます。" />
+                </TextBlock>
+
+                <Separator Margin="0,26" Background="#425B8E" />
+
+                <TextBlock Text="How to use" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource AccentSecondaryBrush}" />
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource MainTextBrush}">
+                    <Run Text="1. Enter a website address, then select Open or press Enter. The https:// prefix is optional. Select the plus button or Browser → New tab to add a tab for another site, and select the x on a tab to close it. There is no fixed tab limit. Select Browser → Open home or the Home button to open your saved home page." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="2. Select Bookmarks → Add this page to bookmarks to save the current page. Select Set current page as home from the same menu to choose the URL opened at startup and from the Home button. Choose saved sites from the collapsible folder tree." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="3. Select Bookmark management → Import from Chrome or Import from Edge to add bookmarks from the browser's default profile. Use Import from HTML file for another profile or a backup file." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="4. Bookmark management → Export for Chrome / Edge creates a standard HTML bookmark file. Import that file from Chrome or Edge's bookmark manager. This menu also contains the action to remove all saved bookmarks." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="5. Select Settings → Always on top to keep the browser above your game. Use the top slider to set opacity from 35% to 100%. Windowed or borderless-window mode is recommended for games. Drag the violet marker at the bottom-right corner to resize the window." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="6. Select Settings → Start with Windows and stay in the notification area to start in the Windows notification area at your next sign-in. Right-click the tray icon to choose Show, Help, or Exit." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="7. The title-bar close button and Alt + F4 hide the window in the notification area without exiting the app. To exit completely, select Exit from the menu bar or tray menu, then select Yes in the confirmation window." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="8. Right-click a web page and select Translate page to replace the current tab with Google's translated page. Select Translate page with Gemini to replace visible text in the original layout. Reload the page to restore its original text. Before first use, save a Gemini API key from Settings → Gemini API key. Use Settings → Translation customization to choose the tone, detail level, and treatment of game terms. See Help → Translation Help for setup and privacy details." />
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+        <Button Grid.Row="1" Width="110" Margin="0,20,0,0" HorizontalAlignment="Right" Content="閉じる / Close" Click="CloseButton_Click" />
+    </Grid>
+</Window>

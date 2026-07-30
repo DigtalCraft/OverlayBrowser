@@ -1,0 +1,41 @@
+<Window x:Class="OverlayBrowser.Form.TranslationPersonalizationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay Browser - 翻訳のカスタマイズ"
+        Width="680"
+        Height="550"
+        MinWidth="580"
+        MinHeight="460"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource MainTextBrush}"
+        FontFamily="Yu Gothic UI"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="翻訳のカスタマイズ" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+        <TextBlock Grid.Row="1" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource SubTextBrush}"
+                   Text="ここに書いた指示を、右クリックでページを翻訳するたびにGeminiへ渡します。文体、説明の詳しさ、ゲーム用語の扱いなどを自由に指定できます。APIキーは入力しないでください。" />
+        <StackPanel Grid.Row="2" Margin="0,20,0,0">
+            <TextBlock Text="翻訳時の希望" Margin="0,0,0,6" />
+            <TextBox x:Name="PersonalizationTextBox"
+                     Height="260"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" />
+            <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource SubTextBrush}"
+                       Text="例: 『自然な日本語で短く訳す。ゲーム内の固有名詞は英語を残す。意味を取り違えそうな時だけ、補足を1文付ける。』" />
+        </StackPanel>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Width="120" Margin="0,0,10,0" Content="標準に戻す" Background="#243650" BorderBrush="#55738F" Click="RestoreDefaultButton_Click" />
+            <Button Width="94" Margin="0,0,10,0" Content="保存" Click="SaveButton_Click" />
+            <Button Width="94" Content="閉じる" Background="#243650" BorderBrush="#55738F" Click="CloseButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

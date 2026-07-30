@@ -1,0 +1,9 @@
+# .NET のビルド生成物はソース管理しない。
+bin/
+obj/
+artifacts/
+
+# Visual Studio のローカル設定は利用者ごとに異なる。
+.vs/
+*.user
+*.suo
