@@ -1,0 +1,97 @@
+<Window x:Class="OverlayBrowser.Form.GeminiBusyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Gemini APIの混雑"
+        Width="540"
+        Height="310"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Foreground="{StaticResource MainTextBrush}"
+        FontFamily="Yu Gothic UI"
+        WindowStartupLocation="CenterOwner">
+    <Border Background="{StaticResource WindowBackgroundBrush}"
+            BorderBrush="{StaticResource AccentBrush}"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="54" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- メイン画面と同じ青黒・シアンのタイトルバー。 -->
+            <Border Grid.Row="0"
+                    Background="#0B1324"
+                    BorderBrush="#233557"
+                    BorderThickness="0,0,0,1"
+                    CornerRadius="11,11,0,0">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                        <Border Width="30"
+                                Height="30"
+                                Background="#162641"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="3">
+                            <Image Source="/Assets/OverlayBrowser.png" Stretch="Uniform" />
+                        </Border>
+                        <TextBlock Margin="10,0,0,0"
+                                   Text="Gemini APIの混雑"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Width="44"
+                            Height="44"
+                            HorizontalAlignment="Right"
+                            Content="×"
+                            FontSize="20"
+                            Foreground="{StaticResource SubTextBrush}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="CloseButton_Click" />
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="1" Margin="26,22,26,10">
+                <TextBlock Text="Gemini APIが一時的に混雑しています。"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentBrush}"
+                           TextWrapping="Wrap" />
+                <TextBlock x:Name="MessageTextBlock"
+                           Margin="0,12,0,0"
+                           Foreground="{StaticResource SubTextBrush}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="2"
+                        Margin="20,0,20,20"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Width="142"
+                        Margin="0,0,8,0"
+                        Content="このモデルで再試行"
+                        Click="RetryButton_Click" />
+                <Button x:Name="AlternativeButton"
+                        Width="154"
+                        Margin="0,0,8,0"
+                        Content="Gemini 2.5 Flashへ切替"
+                        Background="#5361B3"
+                        BorderBrush="#B8ACFF"
+                        Click="AlternativeButton_Click" />
+                <Button Width="82"
+                        Content="閉じる"
+                        Background="#243650"
+                        BorderBrush="#55738F"
+                        Click="CloseButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

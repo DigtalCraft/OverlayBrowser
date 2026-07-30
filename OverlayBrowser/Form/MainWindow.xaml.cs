@@ -1206,7 +1206,7 @@ public partial class MainWindow : Window
     {
         if (!UrlHelper.TryCreateUrl(browser.Address, out var pageUrl))
         {
-            MessageBox.Show("このページは翻訳できません。", "翻訳", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowTranslationMessage(FindBrowserTab(browser), "このページは翻訳できません。", MessageBoxImage.Information);
             return;
         }
 
@@ -1240,7 +1240,9 @@ public partial class MainWindow : Window
     /// </summary>
     /// <param name="browser">翻訳対象のブラウザ。</param>
     /// <returns>翻訳処理の完了を表すタスク。</returns>
-    private async Task TranslatePageWithGeminiAsync(ChromiumWebBrowser browser)
+    private async Task TranslatePageWithGeminiAsync(
+        ChromiumWebBrowser browser,
+        string modelName = GeminiTranslationService.DefaultModelName)
     {
         var browserTab = FindBrowserTab(browser);
         try
@@ -1270,12 +1272,21 @@ public partial class MainWindow : Window
             var result = await geminiTranslationService.TranslateSegmentsAsync(
                 segments,
                 translationTargetCulture,
-                settings.TranslationPersonalization);
+                settings.TranslationPersonalization,
+                modelName);
             if (!result.IsSuccess)
             {
-                if (ShowTranslationFailure(browserTab, result.Message))
+                var failureResult = ShowTranslationFailure(browserTab, result.Message, modelName);
+                if (failureResult == GeminiBusyWindowResult.Retry)
                 {
-                    await TranslatePageWithGeminiAsync(browser);
+                    await TranslatePageWithGeminiAsync(browser, modelName);
+                }
+                else if (failureResult == GeminiBusyWindowResult.UseAlternativeModel)
+                {
+                    var alternativeModel = modelName == GeminiTranslationService.DefaultModelName
+                        ? GeminiTranslationService.AlternativeModelName
+                        : GeminiTranslationService.DefaultModelName;
+                    await TranslatePageWithGeminiAsync(browser, alternativeModel);
                 }
 
                 return;
@@ -1313,14 +1324,19 @@ public partial class MainWindow : Window
     /// <param name="browserTab">翻訳対象のタブ。</param>
     /// <param name="message">表示するメッセージ。</param>
     /// <param name="image">メッセージの種別。</param>
-    private static void ShowTranslationMessage(BrowserTabState? browserTab, string message, MessageBoxImage image)
+    private void ShowTranslationMessage(BrowserTabState? browserTab, string message, MessageBoxImage image)
     {
         if (browserTab is not null)
         {
             browserTab.TranslationOverlay.Visibility = Visibility.Collapsed;
         }
 
-        MessageBox.Show(message, "翻訳", MessageBoxButton.OK, image);
+        _ = image;
+        var messageWindow = new TranslationMessageWindow("翻訳", message)
+        {
+            Owner = this
+        };
+        messageWindow.ShowDialog();
     }
 
     /// <summary>
@@ -1329,17 +1345,34 @@ public partial class MainWindow : Window
     /// <param name="browserTab">翻訳対象のタブ。</param>
     /// <param name="message">Gemini APIから返された利用者向けメッセージ。</param>
     /// <returns>すぐに再試行する場合はtrue。</returns>
-    private static bool ShowTranslationFailure(BrowserTabState? browserTab, string message)
+    private GeminiBusyWindowResult ShowTranslationFailure(
+        BrowserTabState? browserTab,
+        string message,
+        string modelName)
     {
         if (browserTab is not null)
         {
             browserTab.TranslationOverlay.Visibility = Visibility.Collapsed;
         }
 
-        var canRetry = message.StartsWith("Gemini APIが混雑しています。", StringComparison.Ordinal);
-        var button = canRetry ? MessageBoxButton.YesNo : MessageBoxButton.OK;
-        var result = MessageBox.Show(message, "翻訳", button, MessageBoxImage.Information);
-        return canRetry && result == MessageBoxResult.Yes;
+        if (!message.StartsWith("Gemini APIが混雑しています。", StringComparison.Ordinal))
+        {
+            var messageWindow = new TranslationMessageWindow("翻訳", message)
+            {
+                Owner = this
+            };
+            messageWindow.ShowDialog();
+            return GeminiBusyWindowResult.Close;
+        }
+
+        var busyWindow = new GeminiBusyWindow(
+            message,
+            modelName != GeminiTranslationService.AlternativeModelName)
+        {
+            Owner = this
+        };
+        busyWindow.ShowDialog();
+        return busyWindow.Result;
     }
 
     /// <summary>

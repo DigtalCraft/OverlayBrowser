@@ -12,7 +12,15 @@ namespace OverlayBrowser.Service;
 /// </summary>
 public sealed class GeminiTranslationService
 {
-    private const string ModelName = "gemini-2.5-flash-lite";
+    /// <summary>
+    /// 通常のページ翻訳で使用するモデル。
+    /// </summary>
+    public const string DefaultModelName = "gemini-2.5-flash-lite";
+
+    /// <summary>
+    /// 混雑時に切り替えられる代替モデル。
+    /// </summary>
+    public const string AlternativeModelName = "gemini-2.5-flash";
     private const int TranslationBatchCharacterLimit = 2500;
     private const int TranslationBatchSegmentLimit = 12;
     private const int SegmentTranslationOutputTokenLimit = 8192;
@@ -48,7 +56,8 @@ public sealed class GeminiTranslationService
     public async Task<TranslationResponse> TranslateAsync(
         string text,
         CultureInfo targetCulture,
-        string? personalization)
+        string? personalization,
+        string modelName = DefaultModelName)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -86,7 +95,7 @@ public sealed class GeminiTranslationService
             };
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"https://generativelanguage.googleapis.com/v1beta/models/{ModelName}:generateContent");
+                $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent");
             httpRequest.Headers.Add("x-goog-api-key", apiKey);
             httpRequest.Content = JsonContent.Create(request);
 
@@ -131,7 +140,8 @@ public sealed class GeminiTranslationService
     public async Task<SegmentTranslationResponse> TranslateSegmentsAsync(
         IReadOnlyList<PageTextSegment> segments,
         CultureInfo targetCulture,
-        string? personalization)
+        string? personalization,
+        string modelName = DefaultModelName)
     {
         if (segments.Count == 0 || segments.Any(segment => string.IsNullOrWhiteSpace(segment.Text)))
         {
@@ -147,7 +157,7 @@ public sealed class GeminiTranslationService
         var translations = new List<PageTextSegment>();
         foreach (var batch in CreateTranslationBatches(segments))
         {
-            var result = await TranslateSegmentBatchAsync(batch, apiKey, targetCulture, personalization);
+            var result = await TranslateSegmentBatchAsync(batch, apiKey, targetCulture, personalization, modelName);
             if (!result.IsSuccess)
             {
                 return SegmentTranslationResponse.Failure(result.Message);
@@ -212,12 +222,14 @@ public sealed class GeminiTranslationService
     /// <param name="apiKey">Gemini APIキー。</param>
     /// <param name="targetCulture">翻訳先カルチャ。</param>
     /// <param name="personalization">翻訳結果の文体や補足方針。</param>
+    /// <param name="modelName">使用するGeminiモデル名。</param>
     /// <returns>ノードごとの翻訳結果またはエラー内容。</returns>
     private async Task<SegmentTranslationResponse> TranslateSegmentBatchAsync(
         IReadOnlyList<PageTextSegment> segments,
         string apiKey,
         CultureInfo targetCulture,
-        string? personalization)
+        string? personalization,
+        string modelName)
     {
         try
         {
@@ -240,12 +252,13 @@ public sealed class GeminiTranslationService
                 {
                     Temperature = 0.1,
                     MaxOutputTokens = SegmentTranslationOutputTokenLimit,
-                    ResponseFormat = GeminiResponseFormat.CreatePageTextSegmentArray()
+                    ResponseMimeType = "application/json",
+                    ResponseSchema = GeminiResponseFormat.CreatePageTextSegmentArray()
                 }
             };
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"https://generativelanguage.googleapis.com/v1beta/models/{ModelName}:generateContent");
+                $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent");
             httpRequest.Headers.Add("x-goog-api-key", apiKey);
             httpRequest.Content = JsonContent.Create(request);
 
@@ -373,9 +386,25 @@ public sealed class GeminiTranslationService
                 }
 
                 if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                    document.RootElement.TryGetProperty("translations", out var translationsElement))
+                    TryGetTranslationArray(document.RootElement, out var translationsElement))
                 {
                     return JsonSerializer.Deserialize<List<PageTextSegment>>(translationsElement.GetRawText(), options);
+                }
+
+                if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                    HasTranslationFields(document.RootElement))
+                {
+                    var translation = JsonSerializer.Deserialize<PageTextSegment>(candidate, options);
+                    return translation is null ? null : [translation];
+                }
+
+                if (document.RootElement.ValueKind == JsonValueKind.String)
+                {
+                    var nestedJson = document.RootElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(nestedJson))
+                    {
+                        return DeserializeSegmentTranslations(nestedJson);
+                    }
                 }
             }
             catch (JsonException exception)
@@ -385,6 +414,50 @@ public sealed class GeminiTranslationService
         }
 
         throw lastException ?? new JsonException("Gemini translation JSON was empty.");
+    }
+
+    /// <summary>
+    /// 翻訳結果の配列を大文字小文字に左右されずに取得する。
+    /// </summary>
+    /// <param name="element">候補JSONのルート要素。</param>
+    /// <param name="translationsElement">見つかった翻訳配列。</param>
+    /// <returns>翻訳配列が見つかった場合はtrue。</returns>
+    private static bool TryGetTranslationArray(JsonElement element, out JsonElement translationsElement)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name.Equals("translations", StringComparison.OrdinalIgnoreCase) ||
+                property.Name.Equals("results", StringComparison.OrdinalIgnoreCase) ||
+                property.Name.Equals("items", StringComparison.OrdinalIgnoreCase))
+            {
+                if (property.Value.ValueKind == JsonValueKind.Array)
+                {
+                    translationsElement = property.Value;
+                    return true;
+                }
+            }
+        }
+
+        translationsElement = default;
+        return false;
+    }
+
+    /// <summary>
+    /// JSONオブジェクトが1件分の翻訳結果か確認する。
+    /// </summary>
+    /// <param name="element">確認対象のJSON要素。</param>
+    /// <returns>idとtextを持つ場合はtrue。</returns>
+    private static bool HasTranslationFields(JsonElement element)
+    {
+        var hasId = false;
+        var hasText = false;
+        foreach (var property in element.EnumerateObject())
+        {
+            hasId |= property.Name.Equals("id", StringComparison.OrdinalIgnoreCase);
+            hasText |= property.Name.Equals("text", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return hasId && hasText;
     }
 
     /// <summary>
@@ -420,7 +493,7 @@ public sealed class GeminiTranslationService
 
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
-            return "Gemini APIが混雑しています。［はい］を選ぶと、もう一度翻訳を試します。混雑が続く場合は、数分後にやり直してください。";
+            return "Gemini APIが混雑しています。少し待って再試行するか、別のモデルへ切り替えてください。";
         }
 
         try
@@ -545,63 +618,43 @@ public sealed class GeminiTranslationService
         [JsonPropertyName("maxOutputTokens")]
         public int MaxOutputTokens { get; init; }
 
-        /// <summary>ページ内文字ノードの翻訳結果をJSONで受け取るための形式指定。</summary>
-        [JsonPropertyName("responseFormat")]
+        /// <summary>JSON応答を要求するMIMEタイプ。</summary>
+        [JsonPropertyName("responseMimeType")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public GeminiResponseFormat? ResponseFormat { get; init; }
+        public string? ResponseMimeType { get; init; }
+
+        /// <summary>JSON応答に求める形式。</summary>
+        [JsonPropertyName("responseSchema")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public GeminiJsonSchema? ResponseSchema { get; init; }
     }
 
     /// <summary>
     /// Geminiの構造化出力形式を表す。
     /// </summary>
-    private sealed class GeminiResponseFormat
+    private static class GeminiResponseFormat
     {
-        /// <summary>テキスト応答の形式指定。</summary>
-        [JsonPropertyName("text")]
-        public required GeminiTextResponseFormat Text { get; init; }
-
         /// <summary>
         /// ページ内文字ノードの配列を返す形式指定を作成する。
         /// </summary>
         /// <returns>id と text を必須とするJSON配列の形式指定。</returns>
-        public static GeminiResponseFormat CreatePageTextSegmentArray()
+        public static GeminiJsonSchema CreatePageTextSegmentArray()
         {
-            return new GeminiResponseFormat
+            return new GeminiJsonSchema
             {
-                Text = new GeminiTextResponseFormat
+                Type = "array",
+                Items = new GeminiJsonSchema
                 {
-                    MimeType = "APPLICATION_JSON",
-                    Schema = new GeminiJsonSchema
+                    Type = "object",
+                    Properties = new Dictionary<string, GeminiJsonSchema>
                     {
-                        Type = "array",
-                        Items = new GeminiJsonSchema
-                        {
-                            Type = "object",
-                            Properties = new Dictionary<string, GeminiJsonSchema>
-                            {
-                                ["id"] = new GeminiJsonSchema { Type = "integer" },
-                                ["text"] = new GeminiJsonSchema { Type = "string" }
-                            },
-                            Required = ["id", "text"]
-                        }
-                    }
+                        ["id"] = new GeminiJsonSchema { Type = "integer" },
+                        ["text"] = new GeminiJsonSchema { Type = "string" }
+                    },
+                    Required = ["id", "text"]
                 }
             };
         }
-    }
-
-    /// <summary>
-    /// Geminiのテキスト応答に求めるMIMEタイプとJSONスキーマを表す。
-    /// </summary>
-    private sealed class GeminiTextResponseFormat
-    {
-        /// <summary>応答データのMIMEタイプ。</summary>
-        [JsonPropertyName("mimeType")]
-        public required string MimeType { get; init; }
-
-        /// <summary>応答JSONに求めるスキーマ。</summary>
-        [JsonPropertyName("schema")]
-        public required GeminiJsonSchema Schema { get; init; }
     }
 
     /// <summary>
