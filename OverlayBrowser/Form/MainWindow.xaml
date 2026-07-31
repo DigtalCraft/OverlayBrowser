@@ -33,6 +33,8 @@
         <Style TargetType="MenuItem">
             <Setter Property="Foreground" Value="{StaticResource MainTextBrush}" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="14,8" />
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Template">
@@ -42,8 +44,8 @@
                             <Border x:Name="MenuItemSurface"
                                     Padding="{TemplateBinding Padding}"
                                     Background="{TemplateBinding Background}"
-                                    BorderBrush="Transparent"
-                                    BorderThickness="0"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="3">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -337,7 +339,7 @@
                 <MenuItem Header="ブックマーク" x:Name="BookmarkMenuItem" SubmenuOpened="BookmarkMenuItem_SubmenuOpened">
                     <MenuItem Header="ブックマークがありません" IsEnabled="False" />
                 </MenuItem>
-                <MenuItem Header="ブックマーク整理">
+                <MenuItem Header="ブックマーク詳細">
                     <MenuItem Header="Chromeからインポート" Click="ImportChromeMenuItem_Click" />
                     <MenuItem Header="Edgeからインポート" Click="ImportEdgeMenuItem_Click" />
                     <MenuItem Header="HTMLファイルからインポート" Click="ImportHtmlMenuItem_Click" />
@@ -349,6 +351,9 @@
                     <MenuItem Header="常に前面に表示" x:Name="TopmostMenuItem" IsCheckable="True" Click="TopmostMenuItem_Click" />
                     <MenuItem Header="Windowsの起動時にタスクトレイへ常駐" x:Name="StartWithWindowsMenuItem" IsCheckable="True" Click="StartWithWindowsMenuItem_Click" />
                     <MenuItem Header="ブックマークバーを固定表示" x:Name="BookmarkBarMenuItem" IsCheckable="True" Click="BookmarkBarMenuItem_Click" />
+                    <Separator />
+                    <MenuItem Header="履歴の削除" Click="ClearHistoryMenuItem_Click" />
+                    <MenuItem Header="Cookieの削除" Click="ClearCookiesMenuItem_Click" />
                     <Separator />
                     <MenuItem Header="Gemini APIキー" Click="GeminiApiKeyMenuItem_Click" />
                     <MenuItem Header="翻訳のカスタマイズ" Click="TranslationPersonalizationMenuItem_Click" />
@@ -369,14 +374,18 @@
                     BorderThickness="0,0,0,1"
                     Visibility="Collapsed">
                 <DockPanel LastChildFill="True">
-                    <TextBlock DockPanel.Dock="Left"
-                               Margin="4,0,8,0"
-                               VerticalAlignment="Center"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="15"
-                               Foreground="{StaticResource AccentBrush}"
-                               Text="&#xE734;"
-                               ToolTip="固定ブックマーク" />
+                    <Button DockPanel.Dock="Left"
+                            Width="28"
+                            Height="30"
+                            Margin="2,0,8,0"
+                            Padding="0"
+                            Content="★"
+                            FontSize="18"
+                            Foreground="{StaticResource AccentBrush}"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            ToolTip="このページをブックマークに追加"
+                            Click="AddBookmarkMenuItem_Click" />
                     <Menu x:Name="BookmarkBarMenu"
                           Padding="0"
                           Background="Transparent" />
@@ -392,6 +401,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -417,17 +427,25 @@
                         </Viewbox>
                     </Button>
                     <TextBox Grid.Column="4" x:Name="UrlTextBox" VerticalContentAlignment="Center" KeyDown="UrlTextBox_KeyDown" />
-                    <Button Grid.Column="5" Style="{StaticResource BrowserActionButtonStyle}" Margin="9,0,0,0" Click="OpenButton_Click" ToolTip="開く">
+                    <Button Grid.Column="5"
+                            Style="{StaticResource BrowserActionButtonStyle}"
+                            Margin="9,0,0,0"
+                            Click="AddBookmarkMenuItem_Click"
+                            ToolTip="このページをブックマークに追加"
+                            Content="★"
+                            FontSize="21"
+                            Foreground="{StaticResource AccentSecondaryBrush}" />
+                    <Button Grid.Column="6" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Click="OpenButton_Click" ToolTip="開く">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M12,4 L20,4 L20,12 L17.5,12 L17.5,8.3 L9.8,16 L8,14.2 L15.7,6.5 L12,6.5 Z M5,6 L10,6 L10,8.5 L7.5,8.5 L7.5,16.5 L15.5,16.5 L15.5,14 L18,14 L18,19 L5,19 Z" />
                         </Viewbox>
                     </Button>
-                    <Button Grid.Column="6" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Click="ReloadButton_Click" ToolTip="再読み込み">
+                    <Button Grid.Column="7" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Click="ReloadButton_Click" ToolTip="再読み込み">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M12,4 A8,8 0 1 0 19.5,14 L17,14 A5.5,5.5 0 1 1 16.7,7.2 L14,10 L20,10 L20,4 L18.4,5.6 A8,8 0 0 0 12,4 Z" />
                         </Viewbox>
                     </Button>
-                    <StackPanel Grid.Column="7" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="8" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="透明度" Foreground="{StaticResource SubTextBrush}" VerticalAlignment="Center" Margin="0,0,9,0" />
                         <Slider x:Name="OpacitySlider" Width="115" Minimum="0.35" Maximum="1" Value="1" TickFrequency="0.05" ValueChanged="OpacitySlider_ValueChanged" />
                         <TextBlock x:Name="OpacityTextBlock" Width="42" Text="100%" Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" Margin="9,0,0,0" />

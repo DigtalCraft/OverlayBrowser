@@ -19,6 +19,7 @@ public partial class BookmarkWindow : Window
     private readonly IList<BookmarkItem> bookmarks;
     private readonly bool isDestinationSelection;
     private WpfPoint dragStartPoint;
+    private BookmarkItem? draggedBookmark;
 
     /// <summary>
     /// ユーザーが選択したブックマークのURL。
@@ -182,6 +183,7 @@ public partial class BookmarkWindow : Window
     private void BookmarkTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         dragStartPoint = e.GetPosition(BookmarkTreeView);
+        draggedBookmark = FindBookmarkItem(e.OriginalSource as DependencyObject);
     }
 
     /// <summary>
@@ -192,7 +194,7 @@ public partial class BookmarkWindow : Window
     private void BookmarkTreeView_PreviewMouseMove(object sender, WpfMouseEventArgs e)
     {
         if (isDestinationSelection || e.LeftButton != MouseButtonState.Pressed ||
-            BookmarkTreeView.SelectedItem is not BookmarkItem bookmark)
+            draggedBookmark is not BookmarkItem bookmark)
         {
             return;
         }
@@ -204,6 +206,7 @@ public partial class BookmarkWindow : Window
             return;
         }
 
+        draggedBookmark = null;
         DragDrop.DoDragDrop(BookmarkTreeView, new WpfDataObject(typeof(BookmarkItem), bookmark), WpfDragDropEffects.Move);
     }
 

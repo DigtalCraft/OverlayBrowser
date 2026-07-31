@@ -11,6 +11,11 @@ using CefSharp.Wpf;
 using OverlayBrowser.Helper;
 using OverlayBrowser.Model;
 using OverlayBrowser.Service;
+using WpfMouseButtonEventHandler = System.Windows.Input.MouseButtonEventHandler;
+using WpfMouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+using WpfMouseEventHandler = System.Windows.Input.MouseEventHandler;
+using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
+using WpfPoint = System.Windows.Point;
 
 namespace OverlayBrowser.Form;
 
@@ -19,6 +24,16 @@ namespace OverlayBrowser.Form;
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// 固定ブックマークバーで項目を挿入する位置。
+    /// </summary>
+    private enum BookmarkBarDropPosition
+    {
+        Before,
+        After,
+        Inside
+    }
+
     private const string ApplicationBookmarkFolderName = "このアプリで追加";
     private const string CollectPageTextNodesScript = """
         (() => {
@@ -58,6 +73,13 @@ public partial class MainWindow : Window
     private readonly bool startHidden;
     private AppSettings settings = new();
     private bool isExitConfirmed;
+    private WpfPoint bookmarkBarDragStartPoint;
+    private BookmarkItem? draggedBookmarkBarItem;
+    private MenuItem? draggedBookmarkBarMenuItem;
+    private BookmarkItem? bookmarkBarDropTarget;
+    private MenuItem? bookmarkBarDropTargetMenuItem;
+    private BookmarkBarDropPosition bookmarkBarDropPosition;
+    private bool suppressBookmarkBarClick;
     private readonly CultureInfo translationTargetCulture = CultureInfo.CurrentUICulture;
 
     /// <summary>
@@ -83,7 +105,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         var arguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
         launchTarget = arguments.FirstOrDefault(argument =>
-            !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase));
+            !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase) &&
+            !argument.StartsWith("--clear-browser-data=", StringComparison.OrdinalIgnoreCase) &&
+            !argument.StartsWith("--wait-for-parent=", StringComparison.OrdinalIgnoreCase));
         startHidden = arguments.Any(argument =>
             string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase));
         geminiTranslationService = new GeminiTranslationService(geminiApiKeyStore);
@@ -375,6 +399,87 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 保存されている履歴を削除してアプリを再起動するか確認する。
+    /// </summary>
+    /// <param name="sender">クリックされたメニュー項目。</param>
+    /// <param name="e">クリック時のイベント情報。</param>
+    private void ClearHistoryMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmationWindow = new DataClearConfirmationWindow(
+            "履歴の削除",
+            "保存されている閲覧履歴を削除して、OverlayBrowserを再起動しますか？")
+        {
+            Owner = this
+        };
+        if (confirmationWindow.ShowDialog() != true)
+        {
+            return;
+        }
+
+        RestartAfterBrowserDataDeletion("history");
+    }
+
+    /// <summary>
+    /// 保存されているCookieを削除するか確認する。
+    /// </summary>
+    /// <param name="sender">クリックされたメニュー項目。</param>
+    /// <param name="e">クリック時のイベント情報。</param>
+    private void ClearCookiesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmationWindow = new DataClearConfirmationWindow(
+            "Cookieの削除",
+            "保存されているCookieをすべて削除して、OverlayBrowserを再起動しますか？")
+        {
+            Owner = this
+        };
+        if (confirmationWindow.ShowDialog() != true)
+        {
+            return;
+        }
+
+        RestartAfterBrowserDataDeletion("cookies");
+    }
+
+    /// <summary>
+    /// 指定したブラウザデータを削除するため、アプリを終了して再起動する。
+    /// </summary>
+    /// <param name="dataType">削除対象のデータ種別。</param>
+    private void RestartAfterBrowserDataDeletion(string dataType)
+    {
+        try
+        {
+            var executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                throw new InvalidOperationException("アプリケーションの実行ファイルを取得できませんでした。");
+            }
+
+            var startInfo = new System.Diagnostics.ProcessStartInfo(executablePath)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            };
+            startInfo.ArgumentList.Add($"--clear-browser-data={dataType}");
+            startInfo.ArgumentList.Add($"--wait-for-parent={Environment.ProcessId}");
+            System.Diagnostics.Process.Start(startInfo);
+
+            isExitConfirmed = true;
+            Close();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"Browser data deletion restart failed: {exception}");
+            var messageWindow = new TranslationMessageWindow(
+                "データの削除",
+                "OverlayBrowserを再起動できなかったため、データを削除できませんでした。")
+            {
+                Owner = this
+            };
+            messageWindow.ShowDialog();
+        }
+    }
+
+    /// <summary>
     /// 透明度スライダーの値を各表示領域へ反映する。
     /// </summary>
     /// <param name="sender">イベントの発生元。</param>
@@ -438,7 +543,13 @@ public partial class MainWindow : Window
         if (GetBookmarkUrls(settings.Bookmarks).Any(itemUrl =>
                 string.Equals(itemUrl, url, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show("この URL はすでに登録されています。", "ブックマーク", MessageBoxButton.OK, MessageBoxImage.Information);
+            var messageWindow = new TranslationMessageWindow(
+                "ブックマーク",
+                "このURLはすでにブックマークへ登録されています。")
+            {
+                Owner = this
+            };
+            messageWindow.ShowDialog();
             return;
         }
 
@@ -712,16 +823,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 終了確認画面を表示し、肯定された場合だけアプリを終了する。
+    /// OverlayBrowserを終了する。
     /// </summary>
     private void RequestExit()
     {
-        var confirmationWindow = new ExitConfirmationWindow { Owner = this };
-        if (confirmationWindow.ShowDialog() != true)
-        {
-            return;
-        }
-
         isExitConfirmed = true;
         Close();
     }
@@ -785,14 +890,15 @@ public partial class MainWindow : Window
         var menuItem = new MenuItem
         {
             Header = CreateBookmarkBarHeader(bookmark),
-            Tag = "BookmarkBar"
+            Tag = bookmark,
+            ContextMenu = CreateBookmarkBarContextMenu(bookmark)
         };
+        AttachBookmarkBarDragHandlers(menuItem);
 
         if (!bookmark.IsFolder)
         {
             menuItem.CommandParameter = bookmark.Url;
             menuItem.ToolTip = bookmark.Url;
-            menuItem.Click += BookmarkBarBookmark_Click;
             return menuItem;
         }
 
@@ -813,6 +919,544 @@ public partial class MainWindow : Window
         }
 
         return menuItem;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの項目へドラッグ操作を設定する。
+    /// </summary>
+    /// <param name="menuItem">操作対象のメニュー項目。</param>
+    private void AttachBookmarkBarDragHandlers(MenuItem menuItem)
+    {
+        menuItem.AddHandler(
+            UIElement.PreviewMouseLeftButtonDownEvent,
+            new WpfMouseButtonEventHandler(BookmarkBarItem_PreviewMouseLeftButtonDown),
+            handledEventsToo: true);
+        menuItem.AddHandler(
+            UIElement.PreviewMouseMoveEvent,
+            new WpfMouseEventHandler(BookmarkBarItem_PreviewMouseMove),
+            handledEventsToo: true);
+        menuItem.AddHandler(
+            UIElement.PreviewMouseLeftButtonUpEvent,
+            new WpfMouseButtonEventHandler(BookmarkBarItem_PreviewMouseLeftButtonUp),
+            handledEventsToo: true);
+        menuItem.AddHandler(
+            UIElement.PreviewMouseRightButtonUpEvent,
+            new WpfMouseButtonEventHandler(BookmarkBarItem_PreviewMouseRightButtonUp),
+            handledEventsToo: true);
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの右クリックメニューを作成する。
+    /// </summary>
+    /// <param name="bookmark">操作対象のブックマーク。</param>
+    /// <returns>削除操作を含む右クリックメニュー。</returns>
+    private System.Windows.Controls.ContextMenu CreateBookmarkBarContextMenu(BookmarkItem bookmark)
+    {
+        var deleteMenuItem = new MenuItem
+        {
+            Header = bookmark.IsFolder ? "フォルダを削除" : "ブックマークを削除",
+            Tag = bookmark,
+            Style = (Style)FindResource(typeof(MenuItem))
+        };
+        deleteMenuItem.Click += DeleteBookmarkBarItem_Click;
+
+        var contextMenu = new System.Windows.Controls.ContextMenu
+        {
+            Background = (System.Windows.Media.Brush)FindResource("PanelBackgroundBrush"),
+            Foreground = (System.Windows.Media.Brush)FindResource("MainTextBrush"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4),
+            Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint
+        };
+        contextMenu.Items.Add(deleteMenuItem);
+        return contextMenu;
+    }
+
+    /// <summary>
+    /// 右クリックで選択したブックマークまたはフォルダを削除する。
+    /// </summary>
+    /// <param name="sender">選択された削除メニュー。</param>
+    /// <param name="e">クリック時のイベント情報。</param>
+    private void DeleteBookmarkBarItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: BookmarkItem bookmark })
+        {
+            return;
+        }
+
+        var itemName = string.IsNullOrWhiteSpace(bookmark.Name)
+            ? bookmark.IsFolder ? "名前のないフォルダ" : bookmark.Url
+            : bookmark.Name;
+        var title = bookmark.IsFolder ? "フォルダの削除" : "ブックマークの削除";
+        var message = bookmark.IsFolder
+            ? $"フォルダ「{itemName}」と、その中のブックマークをすべて削除しますか？\nこの操作は元に戻せません。"
+            : $"ブックマーク「{itemName}」を削除しますか？\nこの操作は元に戻せません。";
+        var confirmationWindow = new DataClearConfirmationWindow(title, message)
+        {
+            Owner = this
+        };
+        if (confirmationWindow.ShowDialog() != true ||
+            !RemoveBookmark(settings.Bookmarks, bookmark))
+        {
+            return;
+        }
+
+        settingsService.Save(settings);
+        UpdateBookmarkMenu();
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの右クリックメニューを表示する。
+    /// </summary>
+    /// <param name="sender">右クリックされたメニュー項目。</param>
+    /// <param name="e">マウス操作のイベント情報。</param>
+    private void BookmarkBarItem_PreviewMouseRightButtonUp(object sender, WpfMouseButtonEventArgs e)
+    {
+        var menuItem = FindBookmarkBarMenuItem(e.OriginalSource as DependencyObject);
+        if (menuItem?.ContextMenu is not { } contextMenu)
+        {
+            return;
+        }
+
+        contextMenu.PlacementTarget = menuItem;
+        contextMenu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーでドラッグ開始位置を記録する。
+    /// </summary>
+    /// <param name="sender">クリックされたメニュー項目。</param>
+    /// <param name="e">マウス操作のイベント情報。</param>
+    private void BookmarkBarItem_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var sourceItem = FindBookmarkBarMenuItem(e.OriginalSource as DependencyObject);
+        if (sourceItem is null || sourceItem.Tag is not BookmarkItem bookmark)
+        {
+            draggedBookmarkBarItem = null;
+            return;
+        }
+
+        var menuItem = sourceItem;
+        bookmarkBarDragStartPoint = e.GetPosition(this);
+        draggedBookmarkBarItem = bookmark;
+        draggedBookmarkBarMenuItem = menuItem;
+        bookmarkBarDropTarget = null;
+        ClearBookmarkBarDropIndicator();
+        suppressBookmarkBarClick = false;
+        menuItem.IsSubmenuOpen = bookmark.IsFolder;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの項目をドラッグする。
+    /// </summary>
+    /// <param name="sender">操作中のメニュー項目。</param>
+    /// <param name="e">マウス操作のイベント情報。</param>
+    private void BookmarkBarItem_PreviewMouseMove(object sender, WpfMouseEventArgs e)
+    {
+        if (draggedBookmarkBarMenuItem is not MenuItem menuItem ||
+            e.LeftButton != MouseButtonState.Pressed ||
+            draggedBookmarkBarItem is not BookmarkItem bookmark)
+        {
+            return;
+        }
+
+        var currentPoint = e.GetPosition(this);
+        if (Math.Abs(currentPoint.X - bookmarkBarDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(currentPoint.Y - bookmarkBarDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var targetMenuItem = FindBookmarkBarMenuItem(Mouse.DirectlyOver as DependencyObject) ??
+                             FindBookmarkBarMenuItem(e.OriginalSource as DependencyObject);
+        var target = targetMenuItem?.Tag as BookmarkItem;
+        if (target is not null &&
+            !ReferenceEquals(bookmark, target) &&
+            !ContainsBookmark(bookmark, target))
+        {
+            ClearBookmarkBarDropIndicator();
+            bookmarkBarDropTarget = target;
+            bookmarkBarDropTargetMenuItem = targetMenuItem;
+            bookmarkBarDropPosition = GetBookmarkBarDropPosition(targetMenuItem!, target);
+            if (target.IsFolder && bookmarkBarDropPosition == BookmarkBarDropPosition.Inside)
+            {
+                targetMenuItem!.IsSubmenuOpen = true;
+            }
+
+            ShowBookmarkBarDropIndicator(targetMenuItem!, bookmarkBarDropPosition);
+        }
+        else
+        {
+            bookmarkBarDropTarget = null;
+            ClearBookmarkBarDropIndicator();
+        }
+
+        suppressBookmarkBarClick = true;
+        Mouse.OverrideCursor = System.Windows.Input.Cursors.SizeAll;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーでマウス捕捉を解除する。
+    /// </summary>
+    /// <param name="sender">操作中のメニュー項目。</param>
+    /// <param name="e">マウス操作のイベント情報。</param>
+    private void BookmarkBarItem_PreviewMouseLeftButtonUp(object sender, WpfMouseButtonEventArgs e)
+    {
+        if (draggedBookmarkBarMenuItem is not MenuItem menuItem)
+        {
+            return;
+        }
+
+        var source = draggedBookmarkBarItem;
+        var target = bookmarkBarDropTarget;
+        var dropPosition = bookmarkBarDropPosition;
+        var wasDragged = suppressBookmarkBarClick;
+        ResetBookmarkBarDragState();
+
+        if (wasDragged)
+        {
+            if (source is not null && target is not null)
+            {
+                MoveBookmarkBarItem(source, target, dropPosition);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (menuItem.CommandParameter is string bookmarkUrl)
+        {
+            OpenBookmarkBarBookmark(bookmarkUrl);
+            CloseBookmarkBarSubmenus();
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// マウス位置から項目の前後またはフォルダ内への挿入位置を取得する。
+    /// </summary>
+    /// <param name="menuItem">移動先のメニュー項目。</param>
+    /// <param name="bookmark">移動先のブックマーク。</param>
+    /// <returns>項目を挿入する位置。</returns>
+    private static BookmarkBarDropPosition GetBookmarkBarDropPosition(
+        MenuItem menuItem,
+        BookmarkItem bookmark)
+    {
+        var parentItems = ItemsControl.ItemsControlFromItemContainer(menuItem);
+        var mousePoint = Mouse.GetPosition(menuItem);
+        var isHorizontal = parentItems is System.Windows.Controls.Menu;
+        var itemLength = isHorizontal ? menuItem.ActualWidth : menuItem.ActualHeight;
+        var mousePosition = isHorizontal ? mousePoint.X : mousePoint.Y;
+
+        if (mousePosition <= itemLength * 0.3)
+        {
+            return BookmarkBarDropPosition.Before;
+        }
+
+        if (mousePosition >= itemLength * 0.7)
+        {
+            return BookmarkBarDropPosition.After;
+        }
+
+        if (bookmark.IsFolder)
+        {
+            return BookmarkBarDropPosition.Inside;
+        }
+
+        return mousePosition < itemLength / 2
+            ? BookmarkBarDropPosition.Before
+            : BookmarkBarDropPosition.After;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーへ前後の挿入位置を示す線を表示する。
+    /// </summary>
+    /// <param name="menuItem">線を表示するメニュー項目。</param>
+    /// <param name="dropPosition">項目を挿入する位置。</param>
+    private void ShowBookmarkBarDropIndicator(
+        MenuItem menuItem,
+        BookmarkBarDropPosition dropPosition)
+    {
+        if (dropPosition == BookmarkBarDropPosition.Inside)
+        {
+            return;
+        }
+
+        var parentItems = ItemsControl.ItemsControlFromItemContainer(menuItem);
+        var isHorizontal = parentItems is System.Windows.Controls.Menu;
+        menuItem.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        menuItem.BorderThickness = isHorizontal
+            ? dropPosition == BookmarkBarDropPosition.Before
+                ? new Thickness(3, 0, 0, 0)
+                : new Thickness(0, 0, 3, 0)
+            : dropPosition == BookmarkBarDropPosition.Before
+                ? new Thickness(0, 3, 0, 0)
+                : new Thickness(0, 0, 0, 3);
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの挿入位置を示す線を消去する。
+    /// </summary>
+    private void ClearBookmarkBarDropIndicator()
+    {
+        if (bookmarkBarDropTargetMenuItem is null)
+        {
+            return;
+        }
+
+        bookmarkBarDropTargetMenuItem.ClearValue(System.Windows.Controls.Control.BorderBrushProperty);
+        bookmarkBarDropTargetMenuItem.ClearValue(System.Windows.Controls.Control.BorderThicknessProperty);
+        bookmarkBarDropTargetMenuItem = null;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーのドラッグ状態を解除する。
+    /// </summary>
+    private void ResetBookmarkBarDragState()
+    {
+        ClearBookmarkBarDropIndicator();
+        draggedBookmarkBarItem = null;
+        draggedBookmarkBarMenuItem = null;
+        bookmarkBarDropTarget = null;
+        bookmarkBarDropPosition = BookmarkBarDropPosition.Before;
+        suppressBookmarkBarClick = false;
+        Mouse.OverrideCursor = null;
+    }
+
+    /// <summary>
+    /// マウス位置にある固定ブックマークバーのメニュー項目を取得する。
+    /// </summary>
+    /// <param name="element">検索開始する画面要素。</param>
+    /// <returns>対象のメニュー項目。見つからない場合はnull。</returns>
+    private static MenuItem? FindBookmarkBarMenuItem(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is MenuItem menuItem && menuItem.Tag is BookmarkItem)
+            {
+                return menuItem;
+            }
+
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーから対象のブックマーク項目を取得する。
+    /// </summary>
+    /// <param name="itemsControl">検索対象のメニュー。</param>
+    /// <param name="target">検索するブックマーク。</param>
+    /// <returns>対象のメニュー項目。見つからない場合はnull。</returns>
+    private static MenuItem? FindBookmarkBarMenuItem(ItemsControl itemsControl, BookmarkItem target)
+    {
+        foreach (var menuItem in itemsControl.Items.OfType<MenuItem>())
+        {
+            if (ReferenceEquals(menuItem.Tag, target))
+            {
+                return menuItem;
+            }
+
+            if (menuItem.Tag is BookmarkItem { IsFolder: true } &&
+                FindBookmarkBarMenuItem(menuItem, target) is { } childMenuItem)
+            {
+                return childMenuItem;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// マウス位置にある固定ブックマークバーの項目を取得する。
+    /// </summary>
+    /// <param name="element">検索開始する画面要素。</param>
+    /// <returns>対象のブックマーク。見つからない場合はnull。</returns>
+    private static BookmarkItem? FindBookmarkBarItem(DependencyObject? element)
+    {
+        return FindBookmarkBarMenuItem(element)?.Tag as BookmarkItem;
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーの項目を指定位置へ移動する。
+    /// </summary>
+    /// <param name="source">移動するブックマーク。</param>
+    /// <param name="target">移動先のブックマーク。</param>
+    /// <param name="dropPosition">項目を挿入する位置。</param>
+    private void MoveBookmarkBarItem(
+        BookmarkItem source,
+        BookmarkItem target,
+        BookmarkBarDropPosition dropPosition)
+    {
+        if (dropPosition != BookmarkBarDropPosition.Inside &&
+            TryMoveBookmarkWithinSameList(source, target, dropPosition))
+        {
+            settingsService.Save(settings);
+            return;
+        }
+
+        if (ReferenceEquals(source, target) ||
+            ContainsBookmark(source, target) ||
+            !RemoveBookmark(settings.Bookmarks, source))
+        {
+            return;
+        }
+
+        if (dropPosition == BookmarkBarDropPosition.Inside && target.IsFolder)
+        {
+            target.Children.Add(source);
+        }
+        else if (FindBookmarkList(settings.Bookmarks, target) is { } targetList)
+        {
+            var targetIndex = targetList.IndexOf(target);
+            if (dropPosition == BookmarkBarDropPosition.After)
+            {
+                targetIndex++;
+            }
+
+            targetList.Insert(targetIndex, source);
+        }
+        else
+        {
+            settings.Bookmarks.Add(source);
+        }
+
+        settingsService.Save(settings);
+        UpdateBookmarkMenu();
+    }
+
+    /// <summary>
+    /// 同じ一覧内でブックマークの順番を入れ替える。
+    /// </summary>
+    /// <param name="source">移動するブックマーク。</param>
+    /// <param name="target">移動先のブックマーク。</param>
+    /// <param name="dropPosition">項目を挿入する位置。</param>
+    /// <returns>同じ一覧内で入れ替えた場合はtrue。</returns>
+    private bool TryMoveBookmarkWithinSameList(
+        BookmarkItem source,
+        BookmarkItem target,
+        BookmarkBarDropPosition dropPosition)
+    {
+        var sourceList = FindBookmarkList(settings.Bookmarks, source);
+        var targetList = FindBookmarkList(settings.Bookmarks, target);
+        if (sourceList is null ||
+            targetList is null ||
+            !ReferenceEquals(sourceList, targetList))
+        {
+            return false;
+        }
+
+        var sourceMenuItem = FindBookmarkBarMenuItem(BookmarkBarMenu, source);
+        var targetMenuItem = FindBookmarkBarMenuItem(BookmarkBarMenu, target);
+        var parentItems = sourceMenuItem is null
+            ? null
+            : ItemsControl.ItemsControlFromItemContainer(sourceMenuItem);
+        var targetParentItems = targetMenuItem is null
+            ? null
+            : ItemsControl.ItemsControlFromItemContainer(targetMenuItem);
+        if (sourceMenuItem is null ||
+            targetMenuItem is null ||
+            parentItems is null ||
+            !ReferenceEquals(parentItems, targetParentItems))
+        {
+            return false;
+        }
+
+        var sourceIndex = sourceList.IndexOf(source);
+        var targetIndex = sourceList.IndexOf(target);
+        var menuSourceIndex = parentItems.Items.IndexOf(sourceMenuItem);
+        var menuTargetIndex = parentItems.Items.IndexOf(targetMenuItem);
+        if (sourceIndex < 0 ||
+            targetIndex < 0 ||
+            menuSourceIndex < 0 ||
+            menuTargetIndex < 0)
+        {
+            return false;
+        }
+
+        sourceList.RemoveAt(sourceIndex);
+        if (sourceIndex < targetIndex)
+        {
+            targetIndex--;
+        }
+
+        if (dropPosition == BookmarkBarDropPosition.After)
+        {
+            targetIndex++;
+        }
+
+        sourceList.Insert(targetIndex, source);
+        parentItems.Items.Remove(sourceMenuItem);
+        if (menuSourceIndex < menuTargetIndex)
+        {
+            menuTargetIndex--;
+        }
+
+        if (dropPosition == BookmarkBarDropPosition.After)
+        {
+            menuTargetIndex++;
+        }
+
+        parentItems.Items.Insert(menuTargetIndex, sourceMenuItem);
+        return true;
+    }
+
+    /// <summary>
+    /// 指定したブックマークを含む一覧から削除する。
+    /// </summary>
+    /// <param name="items">検索対象の一覧。</param>
+    /// <param name="target">削除するブックマーク。</param>
+    /// <returns>削除できた場合はtrue。</returns>
+    private static bool RemoveBookmark(IList<BookmarkItem> items, BookmarkItem target)
+    {
+        if (items.Remove(target))
+        {
+            return true;
+        }
+
+        return items.Where(item => item.IsFolder).Any(item => RemoveBookmark(item.Children, target));
+    }
+
+    /// <summary>
+    /// 指定したブックマークを直接含む一覧を取得する。
+    /// </summary>
+    /// <param name="items">検索対象の一覧。</param>
+    /// <param name="target">検索するブックマーク。</param>
+    /// <returns>直接含む一覧。見つからない場合はnull。</returns>
+    private static IList<BookmarkItem>? FindBookmarkList(IList<BookmarkItem> items, BookmarkItem target)
+    {
+        if (items.Contains(target))
+        {
+            return items;
+        }
+
+        foreach (var folder in items.Where(item => item.IsFolder))
+        {
+            if (FindBookmarkList(folder.Children, target) is { } childList)
+            {
+                return childList;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 指定した親フォルダの配下に対象が含まれるか確認する。
+    /// </summary>
+    /// <param name="parent">親として確認するブックマーク。</param>
+    /// <param name="target">検索するブックマーク。</param>
+    /// <returns>配下に含まれる場合はtrue。</returns>
+    private static bool ContainsBookmark(BookmarkItem parent, BookmarkItem target)
+    {
+        return parent.Children.Any(child =>
+            ReferenceEquals(child, target) || ContainsBookmark(child, target));
     }
 
     /// <summary>
@@ -845,18 +1489,27 @@ public partial class MainWindow : Window
     /// <summary>
     /// 固定バーで選択したブックマークを現在のタブへ表示する。
     /// </summary>
-    /// <param name="sender">選択されたブックマーク。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void BookmarkBarBookmark_Click(object sender, RoutedEventArgs e)
+    /// <param name="bookmarkUrl">選択したブックマークのURL。</param>
+    private void OpenBookmarkBarBookmark(string bookmarkUrl)
     {
-        if (sender is not MenuItem { CommandParameter: string bookmarkUrl } ||
-            !UrlHelper.TryCreateUrl(bookmarkUrl, out var url))
+        if (!UrlHelper.TryCreateUrl(bookmarkUrl, out var url))
         {
             return;
         }
 
         UrlTextBox.Text = url;
         NavigateToInputUrl();
+    }
+
+    /// <summary>
+    /// 固定ブックマークバーのサブメニューを閉じる。
+    /// </summary>
+    private void CloseBookmarkBarSubmenus()
+    {
+        foreach (var menuItem in BookmarkBarMenu.Items.OfType<MenuItem>())
+        {
+            menuItem.IsSubmenuOpen = false;
+        }
     }
 
     /// <summary>

@@ -23,7 +23,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- 翻訳画面でもアプリ本体と同じタイトルバーを使う。 -->
+            <!-- 各種メッセージもアプリ本体と同じタイトルバーで表示する。 -->
             <Border Grid.Row="0"
                     Background="#0B1324"
                     BorderBrush="#233557"

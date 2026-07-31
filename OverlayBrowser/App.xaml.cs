@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -12,6 +13,8 @@ namespace OverlayBrowser;
 /// </summary>
 public partial class App : System.Windows.Application
 {
+    private const string ClearBrowserDataArgumentPrefix = "--clear-browser-data=";
+    private const string WaitForParentArgumentPrefix = "--wait-for-parent=";
     private const int DwmUseImmersiveDarkMode = 20;
     private const int DwmBorderColor = 34;
     private const int DwmCaptionColor = 35;
@@ -29,6 +32,8 @@ public partial class App : System.Windows.Application
     /// </summary>
     public App()
     {
+        DeleteRequestedBrowserData();
+
         EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,
@@ -56,6 +61,109 @@ public partial class App : System.Windows.Application
                 MessageBoxImage.Error);
             Shutdown(1);
         }
+    }
+
+    /// <summary>
+    /// 再起動時に、指定された履歴またはCookieのファイルをCEF初期化前に削除する。
+    /// </summary>
+    private static void DeleteRequestedBrowserData()
+    {
+        var arguments = Environment.GetCommandLineArgs();
+        var dataArgument = arguments.FirstOrDefault(argument =>
+            argument.StartsWith(ClearBrowserDataArgumentPrefix, StringComparison.OrdinalIgnoreCase));
+        if (dataArgument is null)
+        {
+            return;
+        }
+
+        var parentArgument = arguments.FirstOrDefault(argument =>
+            argument.StartsWith(WaitForParentArgumentPrefix, StringComparison.OrdinalIgnoreCase));
+        if (parentArgument is not null &&
+            int.TryParse(parentArgument[WaitForParentArgumentPrefix.Length..], out var parentProcessId))
+        {
+            WaitForParentProcess(parentProcessId);
+        }
+
+        var profileDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OverlayBrowser",
+            "CefSharpCache",
+            "Default");
+        var dataType = dataArgument[ClearBrowserDataArgumentPrefix.Length..];
+        var deleteSucceeded = dataType.Equals("history", StringComparison.OrdinalIgnoreCase)
+            ? DeleteBrowserDataFiles(profileDirectory, "History", "History-journal", "History-wal", "History-shm")
+            : dataType.Equals("cookies", StringComparison.OrdinalIgnoreCase)
+                ? DeleteBrowserDataFiles(
+                    Path.Combine(profileDirectory, "Network"),
+                    "Cookies",
+                    "Cookies-journal",
+                    "Cookies-wal",
+                    "Cookies-shm")
+                : true;
+
+        if (!deleteSucceeded)
+        {
+            MessageBox.Show(
+                "対象のブラウザデータを削除できませんでした。アプリを終了してから手動で削除してください。",
+                "データの削除",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>
+    /// 親プロセスの終了を待つ。
+    /// </summary>
+    /// <param name="processId">終了を待つ親プロセス番号。</param>
+    private static void WaitForParentProcess(int processId)
+    {
+        try
+        {
+            using var parentProcess = Process.GetProcessById(processId);
+            parentProcess.WaitForExit(15000);
+        }
+        catch (ArgumentException)
+        {
+            // 親プロセスがすでに終了している場合は、そのまま削除処理を続ける。
+        }
+        catch (InvalidOperationException)
+        {
+            // 親プロセスが取得できない場合は、そのまま削除処理を続ける。
+        }
+    }
+
+    /// <summary>
+    /// 指定したブラウザデータファイルを削除する。
+    /// </summary>
+    /// <param name="directoryPath">ファイルが保存されているフォルダ。</param>
+    /// <param name="fileNames">削除するファイル名。</param>
+    /// <returns>すべて削除できた場合はtrue。</returns>
+    private static bool DeleteBrowserDataFiles(string directoryPath, params string[] fileNames)
+    {
+        var succeeded = true;
+        foreach (var fileName in fileNames)
+        {
+            var filePath = Path.Combine(directoryPath, fileName);
+            if (!File.Exists(filePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (IOException)
+            {
+                succeeded = false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                succeeded = false;
+            }
+        }
+
+        return succeeded;
     }
 
     /// <summary>
