@@ -18,6 +18,7 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <TextBlock Text="翻訳のHelp / Translation Help" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                <TextBlock Margin="0,18,0,0" Text="日本語" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentSecondaryBrush}" />
                 <TextBlock Margin="0,14,0,0" TextWrapping="Wrap">
                     <Run Text="英語などのページ上で右クリックし、［ページを翻訳］を選ぶと、今開いているタブをGoogle翻訳のページ翻訳表示へ切り替えます。翻訳先はWindowsの表示言語を自動で使用します。ログインが必要なサイト、Cloudflareなどのアクセス保護があるサイトは、Google翻訳側の制約で表示できない場合があります。その場合は［Geminiでページを翻訳］を使ってください。" />
                     <LineBreak /><LineBreak />
@@ -35,7 +36,30 @@
                     <LineBreak /><LineBreak />
                     <Run Text="翻訳のカスタマイズにAPIキーやパスワードなどの秘密情報は入力しないでください。Gemini翻訳では、入力した指示とページ内の表示文章がGemini APIへ送信されます。画像・CSS・スクリプトは送信しません。APIキーは他人に共有せず、Googleが漏えいと判定したキーは再利用しないでください。" />
                 </TextBlock>
-                <Button Width="260" Margin="0,22,0,0" HorizontalAlignment="Left" Content="Google AI StudioでAPIキーを作成" Click="OpenGoogleAiStudioButton_Click" />
+                <Separator Margin="0,24" Background="#425B8E" />
+                <TextBlock Text="English" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentSecondaryBrush}" />
+                <TextBlock Margin="0,14,0,0" TextWrapping="Wrap">
+                    <Run Text="Right-click an English or other foreign-language webpage and select [Translate page] to open the current tab through Google Translate. The target language is taken from the Windows display language. Sites that require sign-in or use access protection such as Cloudflare may not open because of Google Translate limitations. In that case, use [Translate page with Gemini]." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="A Gemini API key is required only for the initial setup. Open [Settings] → [Gemini API key], then save a key created in Google AI Studio. The key is stored in Windows Credential Manager, not in the application's JSON settings file." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="1. Open Google AI Studio using the button below." />
+                    <LineBreak />
+                    <Run Text="2. Select [Gemini API] → [Import] → [Create key] to create a new key." />
+                    <LineBreak />
+                    <Run Text="3. Copy the key and save it from [Settings] → [Gemini API key] in this application." />
+                    <LineBreak />
+                    <Run Text="4. Use [Settings] → [Translation preferences] to specify writing style, detail level, and how game terminology should be handled. These preferences are sent to Gemini when [Translate page with Gemini] is used." />
+                    <LineBreak />
+                    <Run Text="5. Choose [Translate page] for a Google Translate view, or [Translate page with Gemini] to replace only the displayed text while keeping the original page layout. Reload the page to restore the original text after Gemini translation." />
+                    <LineBreak /><LineBreak />
+                    <Run Text="Do not enter API keys, passwords, or other secrets in Translation preferences. Gemini translation sends your instructions and visible webpage text to the Gemini API. Images, CSS, and scripts are not sent. Never share the API key, and do not reuse a key that Google has identified as leaked." />
+                </TextBlock>
+                <Button Width="330"
+                        Margin="0,22,0,0"
+                        HorizontalAlignment="Left"
+                        Content="Google AI StudioでAPIキーを作成 / Create API key"
+                        Click="OpenGoogleAiStudioButton_Click" />
             </StackPanel>
         </ScrollViewer>
         <Button Grid.Row="1" Width="110" Margin="0,20,0,0" HorizontalAlignment="Right" Content="閉じる / Close" Background="#243650" BorderBrush="#55738F" Click="CloseButton_Click" />

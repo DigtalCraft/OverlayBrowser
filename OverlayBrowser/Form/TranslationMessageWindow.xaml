@@ -71,6 +71,9 @@
                     Margin="20,0,20,20"
                     HorizontalAlignment="Right"
                     Content="閉じる"
+                    Background="#346E96"
+                    BorderBrush="#77DDF4"
+                    Foreground="#F4FAFF"
                     Click="CloseButton_Click" />
         </Grid>
     </Border>

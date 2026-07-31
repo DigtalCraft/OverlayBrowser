@@ -78,6 +78,9 @@
                 <Button Width="142"
                         Margin="0,0,8,0"
                         Content="このモデルで再試行"
+                        Background="#346E96"
+                        BorderBrush="#77DDF4"
+                        Foreground="#F4FAFF"
                         Click="RetryButton_Click" />
                 <Button x:Name="AlternativeButton"
                         Width="154"

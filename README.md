@@ -57,7 +57,7 @@
 ### ビルド
 
 ```powershell
-dotnet build OverlayBrowser.slnx
+dotnet build OverlayBrowser/OverlayBrowser.csproj
 ```
 
 ### 実行するEXEと出力先
@@ -83,11 +83,14 @@ dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self
 
 ### インストーラー
 
-`Setup/OverlayBrowser.iss` は Inno Setup 6 用のインストーラー定義です。先に次のコマンドでRelease用ファイルを発行してから、Inno Setup Compilerで `.iss` をビルドしてください。
+Visual Studio Installer Projectsを導入したVisual Studioで `OverlayBrowser.sln` を開き、構成を `Release` にして `Installer` プロジェクトをビルドします。
 
-```powershell
-dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained false
-```
+- `Installer/Release/Setup.msi`: Windows Installer本体
+- `Installer/Release/setup.exe`: `Setup.msi`を起動するブートストラッパー
+
+`Installer` は `OverlayBrowser/Properties/PublishProfiles/Installer.pubxml` を使用し、.NETランタイム、CefSharp、Chromium部品を含む64bit向けの自己完結型アプリを収録します。インストール先はユーザー単位で、デスクトップとスタートメニューへショートカットを作成します。
+
+従来の `Setup/OverlayBrowser.iss` は、Inno Setup 6を利用する場合の代替定義として残しています。
 
 インストーラーはアプリ本体のアイコンを利用し、Windowsの「インストールされているアプリ」およびアンインストール画面にも同じアイコンを表示します。
 
@@ -100,8 +103,8 @@ dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self
 ソースから自分で作成する場合は、以下の手順で内容を確認できます。
 
 1. リポジトリのソースを確認する。
-2. `dotnet publish` を実行する。
-3. `Setup/OverlayBrowser.iss` を Inno Setup Compiler でビルドする。
+2. Visual Studioで `OverlayBrowser.sln` を開く。
+3. `Release` 構成で `Installer` プロジェクトをビルドする。
 
 将来、コード署名証明書を導入して署名したリリースでは、この警告が減る場合があります。ただし、SmartScreenの表示は署名の有無だけでなく、配布実績などにも影響されます。
 
@@ -132,7 +135,7 @@ Overlay Browser is a lightweight Windows browser for keeping guides, chat, maps,
 ### Build
 
 ```powershell
-dotnet build OverlayBrowser.slnx
+dotnet build OverlayBrowser/OverlayBrowser.csproj
 ```
 
 ### Which EXE should I run?
@@ -156,6 +159,17 @@ Use a Visual Studio publish profile, or run this from the repository root:
 dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained false
 ```
 
+### Installer
+
+Open `OverlayBrowser.sln` in Visual Studio with the Visual Studio Installer Projects extension installed. Select the `Release` configuration and build the `Installer` project.
+
+- `Installer/Release/Setup.msi`: Windows Installer package
+- `Installer/Release/setup.exe`: bootstrapper that starts `Setup.msi`
+
+The installer uses `OverlayBrowser/Properties/PublishProfiles/Installer.pubxml` and packages a self-contained 64-bit build including .NET, CefSharp, and Chromium components. It creates desktop and Start menu shortcuts and uses the Overlay Browser icon for shortcuts and the Windows uninstall entry.
+
+The existing `Setup/OverlayBrowser.iss` remains available as an alternative definition for Inno Setup 6.
+
 ### Unsigned installer warning
 
 The current installer is **not code-signed** with a certificate that identifies its publisher to Windows. Microsoft Defender SmartScreen or another Windows security feature may therefore show a warning such as *Windows protected your PC* or *Publisher could not be verified* when the installer is downloaded or first run. This warning is expected for an unsigned installer; by itself, it does not mean that the file has been identified as malware.
@@ -165,8 +179,8 @@ It is not a guarantee of safety, however. Only use an installer obtained from th
 If you build the installer yourself, you can inspect the source and create it with the following steps:
 
 1. Review the repository source.
-2. Run `dotnet publish`.
-3. Compile `Setup/OverlayBrowser.iss` with Inno Setup Compiler.
+2. Open `OverlayBrowser.sln` in Visual Studio.
+3. Build the `Installer` project in the `Release` configuration.
 
 A future release that uses a code-signing certificate may show fewer warnings. SmartScreen decisions can also depend on distribution reputation, not only on whether a file is signed.
 

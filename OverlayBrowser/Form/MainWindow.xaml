@@ -32,8 +32,116 @@
         </Style>
         <Style TargetType="MenuItem">
             <Setter Property="Foreground" Value="{StaticResource MainTextBrush}" />
-            <Setter Property="Background" Value="#1B2D4A" />
-            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="MenuItemSurface"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0"
+                                    CornerRadius="3">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter ContentSource="Header"
+                                                      RecognizesAccessKey="True"
+                                                      VerticalAlignment="Center"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                                    <Path x:Name="SubmenuArrow"
+                                          Grid.Column="1"
+                                          Width="5"
+                                          Height="9"
+                                          Margin="18,0,0,0"
+                                          VerticalAlignment="Center"
+                                          Fill="#88A7C4"
+                                          Data="M0,0 L5,4.5 L0,9 Z"
+                                          Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                            <Border x:Name="TopLevelInsetDivider"
+                                    Width="2"
+                                    Margin="0,7,-1,7"
+                                    HorizontalAlignment="Right"
+                                    IsHitTestVisible="False"
+                                    Visibility="Collapsed">
+                                <Border.Background>
+                                    <!-- 左を暗く、右をわずかに明るくして浅い溝に見せる。 -->
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Offset="0" Color="#081426" />
+                                        <GradientStop Offset="1" Color="#36516B" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Right"
+                                   PlacementTarget="{Binding ElementName=MenuItemSurface}"
+                                   PopupAnimation="Fade">
+                                <Border Margin="3"
+                                        Padding="5"
+                                        MinWidth="210"
+                                        Background="#12223B"
+                                        BorderBrush="#41627F"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="12" Opacity="0.38" ShadowDepth="3" Color="#02060D" />
+                                    </Border.Effect>
+                                    <ScrollViewer CanContentScroll="False"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Hidden">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Role" Value="TopLevelHeader">
+                                <Setter TargetName="PART_Popup" Property="Placement" Value="Bottom" />
+                                <Setter TargetName="TopLevelInsetDivider" Property="Visibility" Value="Visible" />
+                                <Setter Property="Padding" Value="14,9" />
+                            </Trigger>
+                            <Trigger Property="Role" Value="TopLevelItem">
+                                <Setter TargetName="TopLevelInsetDivider" Property="Visibility" Value="Visible" />
+                                <Setter Property="Padding" Value="14,9" />
+                            </Trigger>
+                            <Trigger Property="Role" Value="SubmenuHeader">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="MenuItemSurface" Property="Background" Value="#274565" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="MenuItemSurface" Property="Background" Value="#294C70" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#71839B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+            <Setter Property="Margin" Value="10,5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="#35516C" SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource InputBackgroundBrush}" />
@@ -121,9 +229,42 @@
         <Style TargetType="TabItem">
             <Setter Property="Background" Value="#162641" />
             <Setter Property="Foreground" Value="#B9C9DE" />
-            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Padding" Value="14,9" />
             <Setter Property="BorderBrush" Value="#334F70" />
             <Setter Property="BorderThickness" Value="1,1,1,0" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabSurface"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5,5,0,0">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabSurface" Property="Background" Value="#1E3558" />
+                                <Setter TargetName="TabSurface" Property="BorderBrush" Value="#5B88AA" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabSurface" Property="Background" Value="#29486F" />
+                                <Setter TargetName="TabSurface" Property="BorderBrush" Value="#6ED8F5" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                                <Setter Property="Panel.ZIndex" Value="10" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#71839B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="#243B61" />

@@ -157,7 +157,12 @@ public sealed class GeminiTranslationService
         var translations = new List<PageTextSegment>();
         foreach (var batch in CreateTranslationBatches(segments))
         {
-            var result = await TranslateSegmentBatchAsync(batch, apiKey, targetCulture, personalization, modelName);
+            var result = await TranslateSegmentBatchWithRetryAsync(
+                batch,
+                apiKey,
+                targetCulture,
+                personalization,
+                modelName);
             if (!result.IsSuccess)
             {
                 return SegmentTranslationResponse.Failure(result.Message);
@@ -167,6 +172,61 @@ public sealed class GeminiTranslationService
         }
 
         return SegmentTranslationResponse.Success(translations);
+    }
+
+    /// <summary>
+    /// Geminiの応答が途中で切れた場合、翻訳単位を半分に分けて再試行する。
+    /// </summary>
+    /// <param name="segments">翻訳対象の文字ノード一覧。</param>
+    /// <param name="apiKey">Gemini APIキー。</param>
+    /// <param name="targetCulture">翻訳先カルチャ。</param>
+    /// <param name="personalization">翻訳結果の文体や補足方針。</param>
+    /// <param name="modelName">使用するGeminiモデル名。</param>
+    /// <returns>ノードごとの翻訳結果またはエラー内容。</returns>
+    private async Task<SegmentTranslationResponse> TranslateSegmentBatchWithRetryAsync(
+        IReadOnlyList<PageTextSegment> segments,
+        string apiKey,
+        CultureInfo targetCulture,
+        string? personalization,
+        string modelName)
+    {
+        var result = await TranslateSegmentBatchAsync(
+            segments,
+            apiKey,
+            targetCulture,
+            personalization,
+            modelName);
+        if (!result.IsOutputTruncated || segments.Count <= 1)
+        {
+            return result;
+        }
+
+        // 出力上限に収まるまで、現在の翻訳単位だけを小さくする。
+        var middle = segments.Count / 2;
+        var firstResult = await TranslateSegmentBatchWithRetryAsync(
+            segments.Take(middle).ToList(),
+            apiKey,
+            targetCulture,
+            personalization,
+            modelName);
+        if (!firstResult.IsSuccess)
+        {
+            return firstResult;
+        }
+
+        var secondResult = await TranslateSegmentBatchWithRetryAsync(
+            segments.Skip(middle).ToList(),
+            apiKey,
+            targetCulture,
+            personalization,
+            modelName);
+        if (!secondResult.IsSuccess)
+        {
+            return secondResult;
+        }
+
+        return SegmentTranslationResponse.Success(
+            firstResult.Translations.Concat(secondResult.Translations).ToList());
     }
 
     /// <summary>
@@ -252,8 +312,9 @@ public sealed class GeminiTranslationService
                 {
                     Temperature = 0.1,
                     MaxOutputTokens = SegmentTranslationOutputTokenLimit,
+                    ThinkingConfig = new GeminiThinkingConfig { ThinkingBudget = 0 },
                     ResponseMimeType = "application/json",
-                    ResponseSchema = GeminiResponseFormat.CreatePageTextSegmentArray()
+                    ResponseJsonSchema = GeminiResponseFormat.CreatePageTextSegmentResponse()
                 }
             };
             using var httpRequest = new HttpRequestMessage(
@@ -269,8 +330,8 @@ public sealed class GeminiTranslationService
             }
 
             var payload = await response.Content.ReadFromJsonAsync<GeminiResponse>();
-            var resultText = payload?.Candidates?
-                .FirstOrDefault()?
+            var candidate = payload?.Candidates?.FirstOrDefault();
+            var resultText = candidate?
                 .Content?
                 .Parts?
                 .Select(part => part.Text)
@@ -280,7 +341,21 @@ public sealed class GeminiTranslationService
                 return SegmentTranslationResponse.Failure("Geminiから翻訳結果を取得できませんでした。");
             }
 
-            var translations = DeserializeSegmentTranslations(resultText);
+            List<PageTextSegment>? translations;
+            try
+            {
+                translations = DeserializeSegmentTranslations(resultText, segments);
+            }
+            catch (JsonException exception)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"Gemini translation JSON failed. FinishReason={candidate?.FinishReason}, " +
+                    $"Length={resultText.Length}, Error={exception.Message}");
+                return string.Equals(candidate?.FinishReason, "MAX_TOKENS", StringComparison.OrdinalIgnoreCase)
+                    ? SegmentTranslationResponse.OutputTruncated("翻訳結果が長く、Geminiの応答が途中で切れました。")
+                    : SegmentTranslationResponse.Failure(
+                        $"Geminiが返した翻訳JSONを読み取れませんでした。（終了理由: {candidate?.FinishReason ?? "不明"}）");
+            }
             if (translations is null || translations.Count == 0)
             {
                 return SegmentTranslationResponse.Failure("Geminiの翻訳結果をページへ反映できませんでした。");
@@ -302,9 +377,10 @@ public sealed class GeminiTranslationService
         {
             return SegmentTranslationResponse.Failure("Gemini APIへ接続できませんでした。ネットワークを確認してください。");
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            return SegmentTranslationResponse.Failure("Geminiの翻訳結果の形式を読み取れませんでした。もう一度試してください。");
+            System.Diagnostics.Debug.WriteLine($"Gemini API response JSON failed: {exception}");
+            return SegmentTranslationResponse.Failure("Gemini APIから返った応答本体を読み取れませんでした。（API応答の解析エラー）");
         }
         catch (Exception)
         {
@@ -329,7 +405,7 @@ public sealed class GeminiTranslationService
             : personalization.Trim();
         var sourceJson = JsonSerializer.Serialize(segments);
 
-        return $"Translate each text value in the JSON array into {targetCulture.EnglishName} ({targetCulture.Name}). Return only a valid JSON array. Keep every id unchanged, preserve URLs, proper names, game item names, numbers, and line breaks. Do not merge, omit, add, or reorder items. Follow this response preference when it does not conflict with faithful translation: {responseStyle}\n\nJSON input:\n{sourceJson}";
+        return $"Translate each text value in the JSON array into {targetCulture.EnglishName} ({targetCulture.Name}). Return only one valid JSON object in this exact shape: {{\"translations\":[{{\"id\":1,\"text\":\"translated text\"}}]}}. Keep every id unchanged, preserve URLs, proper names, game item names, numbers, and line breaks. Do not merge, omit, add, or reorder items. The response preference affects word choice only: never add explanations, notes, sources, Markdown, or text outside the JSON object. When translating Diablo IV, use official Japanese in-game terminology when you know it; otherwise keep the original proper name rather than inventing a translation. Follow this response preference when it does not conflict with faithful translation: {responseStyle}\n\nJSON input:\n{sourceJson}";
     }
 
     /// <summary>
@@ -358,17 +434,15 @@ public sealed class GeminiTranslationService
     /// <param name="resultText">Geminiから返ったJSONまたはJSONを含む文字列。</param>
     /// <returns>ページへ反映する文字ノード一覧。読み取れない場合はnull。</returns>
     /// <exception cref="JsonException">候補内に有効な翻訳JSONが含まれない場合に発生する。</exception>
-    private static List<PageTextSegment>? DeserializeSegmentTranslations(string resultText)
+    private static List<PageTextSegment>? DeserializeSegmentTranslations(
+        string resultText,
+        IReadOnlyList<PageTextSegment> sourceSegments)
     {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            NumberHandling = JsonNumberHandling.AllowReadingFromString
-        };
         var normalizedText = RemoveJsonCodeFence(resultText);
         var candidates = new[]
         {
             normalizedText,
+            ExtractJsonObject(normalizedText),
             ExtractJsonArray(normalizedText)
         }
         .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
@@ -380,31 +454,10 @@ public sealed class GeminiTranslationService
             try
             {
                 using var document = JsonDocument.Parse(candidate);
-                if (document.RootElement.ValueKind == JsonValueKind.Array)
+                var translations = ReadTranslationSegments(document.RootElement, sourceSegments);
+                if (translations is not null && translations.Count > 0)
                 {
-                    return JsonSerializer.Deserialize<List<PageTextSegment>>(candidate, options);
-                }
-
-                if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                    TryGetTranslationArray(document.RootElement, out var translationsElement))
-                {
-                    return JsonSerializer.Deserialize<List<PageTextSegment>>(translationsElement.GetRawText(), options);
-                }
-
-                if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                    HasTranslationFields(document.RootElement))
-                {
-                    var translation = JsonSerializer.Deserialize<PageTextSegment>(candidate, options);
-                    return translation is null ? null : [translation];
-                }
-
-                if (document.RootElement.ValueKind == JsonValueKind.String)
-                {
-                    var nestedJson = document.RootElement.GetString();
-                    if (!string.IsNullOrWhiteSpace(nestedJson))
-                    {
-                        return DeserializeSegmentTranslations(nestedJson);
-                    }
+                    return translations;
                 }
             }
             catch (JsonException exception)
@@ -417,47 +470,208 @@ public sealed class GeminiTranslationService
     }
 
     /// <summary>
-    /// 翻訳結果の配列を大文字小文字に左右されずに取得する。
+    /// JSONの構造を確認し、翻訳結果を数値形式の揺れを許容して読み取る。
     /// </summary>
-    /// <param name="element">候補JSONのルート要素。</param>
-    /// <param name="translationsElement">見つかった翻訳配列。</param>
-    /// <returns>翻訳配列が見つかった場合はtrue。</returns>
-    private static bool TryGetTranslationArray(JsonElement element, out JsonElement translationsElement)
+    /// <param name="element">読み取り対象のJSON要素。</param>
+    /// <returns>読み取れた翻訳結果。対象がない場合はnull。</returns>
+    private static List<PageTextSegment>? ReadTranslationSegments(
+        JsonElement element,
+        IReadOnlyList<PageTextSegment> sourceSegments)
     {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var nestedJson = element.GetString();
+            return string.IsNullOrWhiteSpace(nestedJson)
+                ? null
+                : DeserializeSegmentTranslations(nestedJson, sourceSegments);
+        }
+
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            var translations = new List<PageTextSegment>();
+            foreach (var item in element.EnumerateArray())
+            {
+                if (TryReadTranslationSegment(item, out var translation))
+                {
+                    translations.Add(translation);
+                }
+            }
+
+            if (translations.Count > 0)
+            {
+                return translations;
+            }
+
+            var textTranslations = element
+                .EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+            return textTranslations.Count == 0
+                ? null
+                : sourceSegments
+                    .Take(textTranslations.Count)
+                    .Select((segment, index) => new PageTextSegment(segment.Id, textTranslations[index]!))
+                    .ToList();
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (TryReadTranslationSegment(element, out var singleTranslation))
+        {
+            return [singleTranslation];
+        }
+
+        var mappedTranslations = ReadMappedTranslations(element, sourceSegments);
+        if (mappedTranslations.Count > 0)
+        {
+            return mappedTranslations;
+        }
+
         foreach (var property in element.EnumerateObject())
         {
-            if (property.Name.Equals("translations", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("results", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("items", StringComparison.OrdinalIgnoreCase))
+            if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array or JsonValueKind.String)
             {
-                if (property.Value.ValueKind == JsonValueKind.Array)
+                var nestedTranslations = ReadTranslationSegments(property.Value, sourceSegments);
+                if (nestedTranslations is not null && nestedTranslations.Count > 0)
                 {
-                    translationsElement = property.Value;
-                    return true;
+                    return nestedTranslations;
                 }
             }
         }
 
-        translationsElement = default;
+        return null;
+    }
+
+    /// <summary>
+    /// 1件分の翻訳結果を読み取る。
+    /// </summary>
+    /// <param name="element">翻訳結果のJSONオブジェクト。</param>
+    /// <param name="translation">読み取った翻訳結果。</param>
+    /// <returns>idとtextを読み取れた場合はtrue。</returns>
+    private static bool TryReadTranslationSegment(JsonElement element, out PageTextSegment translation)
+    {
+        translation = new PageTextSegment(0, string.Empty);
+        if (element.ValueKind != JsonValueKind.Object ||
+            !TryGetPropertyIgnoreCase(element, "id", out var idElement) ||
+            !TryGetTranslationText(element, out var textElement) ||
+            !TryReadSegmentId(idElement, out var id))
+        {
+            return false;
+        }
+
+        var text = textElement.ValueKind == JsonValueKind.String
+            ? textElement.GetString()
+            : textElement.ToString();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        translation = new PageTextSegment(id, text);
+        return true;
+    }
+
+    /// <summary>
+    /// IDをプロパティ名、翻訳文を値として返した形式を読み取る。
+    /// </summary>
+    private static List<PageTextSegment> ReadMappedTranslations(
+        JsonElement element,
+        IReadOnlyList<PageTextSegment> sourceSegments)
+    {
+        var sourceIds = sourceSegments.Select(segment => segment.Id).ToHashSet();
+        var translations = new List<PageTextSegment>();
+        foreach (var property in element.EnumerateObject())
+        {
+            if (int.TryParse(property.Name, out var id) &&
+                sourceIds.Contains(id) &&
+                property.Value.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(property.Value.GetString()))
+            {
+                translations.Add(new PageTextSegment(id, property.Value.GetString()!));
+            }
+        }
+
+        return translations;
+    }
+
+    /// <summary>
+    /// 翻訳文を表すJSONプロパティを取得する。
+    /// </summary>
+    private static bool TryGetTranslationText(JsonElement element, out JsonElement value)
+    {
+        foreach (var propertyName in new[] { "text", "translation", "translatedText", "translated_text", "value" })
+        {
+            if (TryGetPropertyIgnoreCase(element, propertyName, out value))
+            {
+                return true;
+            }
+        }
+
+        value = default;
         return false;
     }
 
     /// <summary>
-    /// JSONオブジェクトが1件分の翻訳結果か確認する。
+    /// JSONプロパティ名を大文字小文字に左右されず取得する。
     /// </summary>
-    /// <param name="element">確認対象のJSON要素。</param>
-    /// <returns>idとtextを持つ場合はtrue。</returns>
-    private static bool HasTranslationFields(JsonElement element)
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
     {
-        var hasId = false;
-        var hasText = false;
         foreach (var property in element.EnumerateObject())
         {
-            hasId |= property.Name.Equals("id", StringComparison.OrdinalIgnoreCase);
-            hasText |= property.Name.Equals("text", StringComparison.OrdinalIgnoreCase);
+            if (property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
         }
 
-        return hasId && hasText;
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// JSONの数値または文字列からページ内ノードIDを読み取る。
+    /// </summary>
+    private static bool TryReadSegmentId(JsonElement element, out int id)
+    {
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out id))
+        {
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var number) &&
+            number >= int.MinValue && number <= int.MaxValue && Math.Truncate(number) == number)
+        {
+            id = (int)number;
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.String && int.TryParse(element.GetString(), out id))
+        {
+            return true;
+        }
+
+        id = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// JSONの前後に補足文が付いた場合に、オブジェクト部分だけを取り出す。
+    /// </summary>
+    /// <param name="text">Geminiから返った文字列。</param>
+    /// <returns>見つかったJSONオブジェクト。オブジェクトがない場合は空文字列。</returns>
+    private static string ExtractJsonObject(string text)
+    {
+        var firstBrace = text.IndexOf('{');
+        var lastBrace = text.LastIndexOf('}');
+        return firstBrace >= 0 && lastBrace > firstBrace
+            ? text[firstBrace..(lastBrace + 1)]
+            : string.Empty;
     }
 
     /// <summary>
@@ -549,10 +763,12 @@ public sealed class GeminiTranslationService
     /// <param name="IsSuccess">翻訳に成功したかどうか。</param>
     /// <param name="Message">失敗時に利用者へ表示する内容。</param>
     /// <param name="Translations">ノードIDに対応した翻訳結果。</param>
+    /// <param name="IsOutputTruncated">Geminiの出力上限によって応答が途中で切れたかどうか。</param>
     public sealed record SegmentTranslationResponse(
         bool IsSuccess,
         string Message,
-        IReadOnlyList<PageTextSegment> Translations)
+        IReadOnlyList<PageTextSegment> Translations,
+        bool IsOutputTruncated)
     {
         /// <summary>
         /// 成功したノード翻訳結果を作成する。
@@ -560,7 +776,7 @@ public sealed class GeminiTranslationService
         /// <param name="translations">ページへ反映する翻訳結果。</param>
         /// <returns>成功結果。</returns>
         public static SegmentTranslationResponse Success(IReadOnlyList<PageTextSegment> translations)
-            => new(true, string.Empty, translations);
+            => new(true, string.Empty, translations, false);
 
         /// <summary>
         /// 失敗したノード翻訳結果を作成する。
@@ -568,7 +784,15 @@ public sealed class GeminiTranslationService
         /// <param name="message">利用者へ表示するエラー内容。</param>
         /// <returns>失敗結果。</returns>
         public static SegmentTranslationResponse Failure(string message)
-            => new(false, message, []);
+            => new(false, message, [], false);
+
+        /// <summary>
+        /// 出力上限によって途中で切れた結果を作成する。
+        /// </summary>
+        /// <param name="message">再分割できない場合に利用者へ表示する内容。</param>
+        /// <returns>出力途中切れを表す失敗結果。</returns>
+        public static SegmentTranslationResponse OutputTruncated(string message)
+            => new(false, message, [], true);
     }
 
     /// <summary>
@@ -600,9 +824,10 @@ public sealed class GeminiTranslationService
     /// </summary>
     private sealed class GeminiPart
     {
-        /// <summary>翻訳対象の文章。</summary>
+        /// <summary>送信する文章、または応答に含まれる文章。</summary>
         [JsonPropertyName("text")]
-        public required string Text { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Text { get; init; }
     }
 
     /// <summary>
@@ -618,15 +843,30 @@ public sealed class GeminiTranslationService
         [JsonPropertyName("maxOutputTokens")]
         public int MaxOutputTokens { get; init; }
 
+        /// <summary>Gemini 2.5系の思考トークン設定。</summary>
+        [JsonPropertyName("thinkingConfig")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public GeminiThinkingConfig? ThinkingConfig { get; init; }
+
         /// <summary>JSON応答を要求するMIMEタイプ。</summary>
         [JsonPropertyName("responseMimeType")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ResponseMimeType { get; init; }
 
-        /// <summary>JSON応答に求める形式。</summary>
-        [JsonPropertyName("responseSchema")]
+        /// <summary>JSON応答に求めるJSON Schema形式。</summary>
+        [JsonPropertyName("responseJsonSchema")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public GeminiJsonSchema? ResponseSchema { get; init; }
+        public GeminiJsonSchema? ResponseJsonSchema { get; init; }
+    }
+
+    /// <summary>
+    /// Gemini 2.5系の思考トークン設定を表す。
+    /// </summary>
+    private sealed class GeminiThinkingConfig
+    {
+        /// <summary>内部思考に使用するトークン数。0は思考を無効にする。</summary>
+        [JsonPropertyName("thinkingBudget")]
+        public int ThinkingBudget { get; init; }
     }
 
     /// <summary>
@@ -635,24 +875,32 @@ public sealed class GeminiTranslationService
     private static class GeminiResponseFormat
     {
         /// <summary>
-        /// ページ内文字ノードの配列を返す形式指定を作成する。
+        /// ページ内文字ノードの翻訳結果を返す形式指定を作成する。
         /// </summary>
-        /// <returns>id と text を必須とするJSON配列の形式指定。</returns>
-        public static GeminiJsonSchema CreatePageTextSegmentArray()
+        /// <returns>translations 内に id と text を必須とするJSONオブジェクトの形式指定。</returns>
+        public static GeminiJsonSchema CreatePageTextSegmentResponse()
         {
             return new GeminiJsonSchema
             {
-                Type = "array",
-                Items = new GeminiJsonSchema
+                Type = "object",
+                Properties = new Dictionary<string, GeminiJsonSchema>
                 {
-                    Type = "object",
-                    Properties = new Dictionary<string, GeminiJsonSchema>
+                    ["translations"] = new GeminiJsonSchema
                     {
-                        ["id"] = new GeminiJsonSchema { Type = "integer" },
-                        ["text"] = new GeminiJsonSchema { Type = "string" }
-                    },
-                    Required = ["id", "text"]
-                }
+                        Type = "array",
+                        Items = new GeminiJsonSchema
+                        {
+                            Type = "object",
+                            Properties = new Dictionary<string, GeminiJsonSchema>
+                            {
+                                ["id"] = new GeminiJsonSchema { Type = "integer" },
+                                ["text"] = new GeminiJsonSchema { Type = "string" }
+                            },
+                            Required = ["id", "text"]
+                        }
+                    }
+                },
+                Required = ["translations"]
             };
         }
     }
@@ -700,5 +948,13 @@ public sealed class GeminiTranslationService
         /// <summary>生成されたコンテンツ。</summary>
         [JsonPropertyName("content")]
         public GeminiContent? Content { get; init; }
+
+        /// <summary>生成を終了した理由。</summary>
+        [JsonPropertyName("finishReason")]
+        public string? FinishReason { get; init; }
+
+        /// <summary>生成終了理由の補足。</summary>
+        [JsonPropertyName("finishMessage")]
+        public string? FinishMessage { get; init; }
     }
 }

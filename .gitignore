@@ -2,6 +2,9 @@
 bin/
 obj/
 artifacts/
+# Visual Studio Installer Projectsが生成するMSIとブートストラッパー。
+Installer/Debug/
+Installer/Release/
 
 # Visual Studio のローカル設定は利用者ごとに異なる。
 .vs/

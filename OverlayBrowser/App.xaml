@@ -8,9 +8,71 @@
         <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#0D1426" />
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#15223B" />
         <SolidColorBrush x:Key="InputBackgroundBrush" Color="#EAF7FF" />
+        <SolidColorBrush x:Key="FieldBackgroundBrush" Color="#111C31" />
         <SolidColorBrush x:Key="AccentBrush" Color="#6ED8F5" />
         <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#B8ACFF" />
         <SolidColorBrush x:Key="MainTextBrush" Color="#EDF6FF" />
         <SolidColorBrush x:Key="SubTextBrush" Color="#B9C9DE" />
+
+        <!-- サブ画面に残る標準ボタンを、白文字の青系ボタンへ統一する。 -->
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#346E96" />
+            <Setter Property="Foreground" Value="#F4FAFF" />
+            <Setter Property="BorderBrush" Value="#77DDF4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonSurface"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#4E96C4" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#B8F1FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#285A80" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#26364D" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#425A77" />
+                                <Setter Property="Foreground" Value="#8294AB" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 設定画面の入力欄も白い標準部品に戻らないようにする。 -->
+        <Style TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="{StaticResource FieldBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MainTextBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="#55738F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="SelectionBrush" Value="#5361B3" />
+        </Style>
+        <Style TargetType="{x:Type PasswordBox}">
+            <Setter Property="Background" Value="{StaticResource FieldBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MainTextBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="#55738F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+        </Style>
     </Application.Resources>
 </Application>
