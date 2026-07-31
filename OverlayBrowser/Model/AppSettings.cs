@@ -31,6 +31,11 @@ public sealed class AppSettings
     public bool IsStartWithWindows { get; set; }
 
     /// <summary>
+    /// ブックマークバーをメニュー下へ固定表示するかどうか。
+    /// </summary>
+    public bool IsBookmarkBarPinned { get; set; }
+
+    /// <summary>
     /// Geminiへ渡す翻訳結果の文体や補足方針。
     /// </summary>
     public string TranslationPersonalization { get; set; } = string.Empty;

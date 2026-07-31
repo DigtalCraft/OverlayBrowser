@@ -54,6 +54,8 @@ public partial class MainWindow : Window
     private readonly GeminiTranslationService geminiTranslationService;
     private readonly BrowserContextMenuHandler browserContextMenuHandler;
     private readonly Dictionary<TabItem, BrowserTabState> browserTabs = [];
+    private readonly string? launchTarget;
+    private readonly bool startHidden;
     private AppSettings settings = new();
     private bool isExitConfirmed;
     private readonly CultureInfo translationTargetCulture = CultureInfo.CurrentUICulture;
@@ -79,6 +81,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        var arguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
+        launchTarget = arguments.FirstOrDefault(argument =>
+            !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase));
+        startHidden = arguments.Any(argument =>
+            string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase));
         geminiTranslationService = new GeminiTranslationService(geminiApiKeyStore);
         browserContextMenuHandler = new BrowserContextMenuHandler();
         browserContextMenuHandler.PageTranslationRequested += BrowserContextMenuHandler_PageTranslationRequested;
@@ -102,10 +109,13 @@ public partial class MainWindow : Window
         windowsStartupService.MigrateLegacyEntry();
         settings.IsStartWithWindows = windowsStartupService.IsEnabled();
         StartWithWindowsMenuItem.IsChecked = settings.IsStartWithWindows;
+        BookmarkBarMenuItem.IsChecked = settings.IsBookmarkBarPinned;
+        UpdateBookmarkBarVisibility();
+        UpdateBookmarkMenu();
         OpacitySlider.Value = Math.Clamp(settings.Opacity, OpacitySlider.Minimum, OpacitySlider.Maximum);
         CreateBrowserTab(GetStartupUrl());
 
-        if (windowsStartupService.IsStartedFromWindows())
+        if (startHidden)
         {
             Dispatcher.BeginInvoke(HideToNotificationArea);
         }
@@ -252,6 +262,11 @@ public partial class MainWindow : Window
     /// <returns>起動時に開くURL。</returns>
     private string GetStartupUrl()
     {
+        if (UrlHelper.TryCreateBrowserAddress(launchTarget, out var launchAddress))
+        {
+            return launchAddress;
+        }
+
         return string.IsNullOrWhiteSpace(settings.HomeUrl)
             ? settings.LastUrl
             : settings.HomeUrl;
@@ -352,6 +367,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// ブックマークバーの固定表示を切り替えて設定を保存する。
+    /// </summary>
+    /// <param name="sender">イベントの発生元。</param>
+    /// <param name="e">クリック時のイベント情報。</param>
+    private void BookmarkBarMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        settings.IsBookmarkBarPinned = BookmarkBarMenuItem.IsChecked;
+        UpdateBookmarkBarVisibility();
+        settingsService.Save(settings);
+    }
+
+    /// <summary>
     /// 透明度スライダーの値を各表示領域へ反映する。
     /// </summary>
     /// <param name="sender">イベントの発生元。</param>
@@ -368,6 +395,11 @@ public partial class MainWindow : Window
         if (MenuBarSurface is not null)
         {
             MenuBarSurface.Opacity = e.NewValue;
+        }
+
+        if (BookmarkBarSurface is not null)
+        {
+            BookmarkBarSurface.Opacity = e.NewValue;
         }
 
         if (ToolbarSurface is not null)
@@ -721,6 +753,124 @@ public partial class MainWindow : Window
         BookmarkMenuItem.Items.Add(new Separator());
         AddBookmarkOperationMenuItem("このページをブックマークに追加", AddBookmarkMenuItem_Click);
         AddBookmarkOperationMenuItem("現在のページをホームページに設定", SetHomeMenuItem_Click);
+        UpdateBookmarkBar();
+    }
+
+    /// <summary>
+    /// 保存済みブックマークから固定表示用の横並びメニューを再構築する。
+    /// </summary>
+    private void UpdateBookmarkBar()
+    {
+        BookmarkBarMenu.Items.Clear();
+        if (settings.Bookmarks.Count == 0)
+        {
+            BookmarkBarMenu.Items.Add(new MenuItem
+            {
+                Header = "ブックマークがありません",
+                IsEnabled = false,
+                Tag = "BookmarkBar"
+            });
+            return;
+        }
+
+        foreach (var bookmark in settings.Bookmarks)
+        {
+            BookmarkBarMenu.Items.Add(CreateBookmarkBarMenuItem(bookmark));
+        }
+    }
+
+    /// <summary>
+    /// ブックマークまたはフォルダを固定バー用メニューへ変換する。
+    /// </summary>
+    /// <param name="bookmark">表示するブックマーク。</param>
+    /// <returns>固定バーへ追加するメニュー項目。</returns>
+    private MenuItem CreateBookmarkBarMenuItem(BookmarkItem bookmark)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = CreateBookmarkBarHeader(bookmark),
+            Tag = "BookmarkBar"
+        };
+
+        if (!bookmark.IsFolder)
+        {
+            menuItem.CommandParameter = bookmark.Url;
+            menuItem.ToolTip = bookmark.Url;
+            menuItem.Click += BookmarkBarBookmark_Click;
+            return menuItem;
+        }
+
+        if (bookmark.Children.Count == 0)
+        {
+            menuItem.Items.Add(new MenuItem
+            {
+                Header = "フォルダは空です",
+                IsEnabled = false,
+                Tag = "BookmarkBar"
+            });
+            return menuItem;
+        }
+
+        foreach (var child in bookmark.Children)
+        {
+            menuItem.Items.Add(CreateBookmarkBarMenuItem(child));
+        }
+
+        return menuItem;
+    }
+
+    /// <summary>
+    /// 固定バーに表示するフォルダまたはページの見出しを作成する。
+    /// </summary>
+    /// <param name="bookmark">表示するブックマーク。</param>
+    /// <returns>アイコンと名前を並べた見出し。</returns>
+    private static StackPanel CreateBookmarkBarHeader(BookmarkItem bookmark)
+    {
+        var header = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        header.Children.Add(new TextBlock
+        {
+            Text = bookmark.IsFolder ? "\uE8B7" : "\uE774",
+            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+            Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(184, 172, 255)),
+            Margin = new Thickness(0, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(bookmark.Name) ? bookmark.Url : bookmark.Name,
+            MaxWidth = 190,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        return header;
+    }
+
+    /// <summary>
+    /// 固定バーで選択したブックマークを現在のタブへ表示する。
+    /// </summary>
+    /// <param name="sender">選択されたブックマーク。</param>
+    /// <param name="e">クリック時のイベント情報。</param>
+    private void BookmarkBarBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { CommandParameter: string bookmarkUrl } ||
+            !UrlHelper.TryCreateUrl(bookmarkUrl, out var url))
+        {
+            return;
+        }
+
+        UrlTextBox.Text = url;
+        NavigateToInputUrl();
+    }
+
+    /// <summary>
+    /// 保存済み設定に合わせてブックマークバーの表示状態を更新する。
+    /// </summary>
+    private void UpdateBookmarkBarVisibility()
+    {
+        BookmarkBarSurface.Visibility = settings.IsBookmarkBarPinned
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     /// <summary>

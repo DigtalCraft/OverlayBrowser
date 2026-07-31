@@ -280,6 +280,7 @@
                 <RowDefinition Height="42" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -326,6 +327,7 @@
                 <MenuItem Header="設定">
                     <MenuItem Header="常に前面に表示" x:Name="TopmostMenuItem" IsCheckable="True" Click="TopmostMenuItem_Click" />
                     <MenuItem Header="Windowsの起動時にタスクトレイへ常駐" x:Name="StartWithWindowsMenuItem" IsCheckable="True" Click="StartWithWindowsMenuItem_Click" />
+                    <MenuItem Header="ブックマークバーを固定表示" x:Name="BookmarkBarMenuItem" IsCheckable="True" Click="BookmarkBarMenuItem_Click" />
                     <Separator />
                     <MenuItem Header="Gemini APIキー" Click="GeminiApiKeyMenuItem_Click" />
                     <MenuItem Header="翻訳のカスタマイズ" Click="TranslationPersonalizationMenuItem_Click" />
@@ -337,8 +339,31 @@
                 <MenuItem Header="終了" Click="ExitMenuItem_Click" />
             </Menu>
 
+            <!-- 保存済みの階層を保ったまま、よく使うブックマークを横一列へ固定表示する。 -->
+            <Border x:Name="BookmarkBarSurface"
+                    Grid.Row="2"
+                    Padding="10,2"
+                    Background="#122039"
+                    BorderBrush="#2F506D"
+                    BorderThickness="0,0,0,1"
+                    Visibility="Collapsed">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Left"
+                               Margin="4,0,8,0"
+                               VerticalAlignment="Center"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="15"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="&#xE734;"
+                               ToolTip="固定ブックマーク" />
+                    <Menu x:Name="BookmarkBarMenu"
+                          Padding="0"
+                          Background="Transparent" />
+                </DockPanel>
+            </Border>
+
             <!-- シアン寄りの縁取りで、ツールバー上の操作を見分けやすくする。 -->
-            <Border x:Name="ToolbarSurface" Grid.Row="2" Background="#1C3551" BorderBrush="#3B5A77" BorderThickness="0,0,0,1" Padding="14,11">
+            <Border x:Name="ToolbarSurface" Grid.Row="3" Background="#1C3551" BorderBrush="#3B5A77" BorderThickness="0,0,0,1" Padding="14,11">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -390,7 +415,7 @@
             </Border>
 
             <!-- タブごとにCefSharpのブラウザを保持し、Webページにも透明度を反映する。 -->
-            <Grid Grid.Row="3">
+            <Grid Grid.Row="4">
                 <!-- タブ見出しの余白も透明な穴にせず、常にテーマ色で受け止める。 -->
                 <Border x:Name="BrowserWorkspaceBackground" Background="{StaticResource WindowBackgroundBrush}" />
                 <TabControl x:Name="BrowserTabControl" SelectionChanged="BrowserTabControl_SelectionChanged" />

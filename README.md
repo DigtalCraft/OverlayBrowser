@@ -1,201 +1,376 @@
 # Overlay Browser
 
+<p align="center">
+  <img src="OverlayBrowser/Assets/OverlayBrowser.png" alt="Overlay Browser icon" width="128">
+</p>
+
+<p align="center">
+  透明度を調整し、ほかのウィンドウの上に表示できるWindows用デスクトップブラウザ<br>
+  A Windows desktop browser with adjustable opacity and always-on-top display
+</p>
+
 [日本語](#日本語) / [English](#english)
+
+---
 
 ## 日本語
 
-ゲーム、仕事、配信などの画面のそばで、攻略サイト、チャット、地図、資料などを見たい時のための Windows 用オーバーレイブラウザです。普段使っている Chrome / Edge のブックマークを取り込み、必要なサイトだけを軽く開けます。
+### 概要
 
-### できること
+Overlay Browserは、Webページやローカルファイルを、
+ほかのアプリのそばに表示しておくためのWindows用ブラウザです。
 
-- URLを入力してその場で表示（`https://` の省略可）
-- ［＋］またはメニューから複数タブを追加し、サイトごとに切替
-- 指定したホームURLを起動時またはホームアイコンから表示
-- 表示中のページをブックマークへ追加し、折りたたみ式のツリーで表示
-- Chrome または Edge の既定プロファイルからブックマークをインポート
-- Chrome / Edge が読み込める標準HTML形式でブックマークをエクスポート
-- ［設定］メニューから常に前面に表示するかを切替
-- 上部スライダーで透明度を35〜100%に調整
-- 右下の銅色マーカーをドラッグしてウィンドウサイズを変更
-- ［設定］→［Windowsの起動時にタスクトレイへ常駐］で、サインイン時に画面を開かず常駐
-- タスクトレイのアイコンから表示、ヘルプ、終了を操作
-- ウィンドウ右上の［×］は画面を隠してタスクトレイへ常駐。終了はメニューバーまたはタスクトレイから確認画面を経由して実行
-- 最後に開いたURL、透明度、前面表示設定、Windows起動設定、ブックマークをローカルに保存
-- アプリ内ヘルプを日本語・英語で表示
-- 右クリックの［ページを翻訳］で、現在のタブをGoogle翻訳のページ翻訳表示へ切替
-- Gemini APIキーはWindows Credential Managerに保存し、［Geminiでページを翻訳］を選んだ時だけ表示文章と設定済み指示をGemini APIへ送信
-- ［設定］→［翻訳のカスタマイズ］で、翻訳の文体・補足方針・ゲーム用語の扱いを保存
+ウィンドウの透明度、最前面表示、複数タブ、固定ブックマークバー、タスクトレイ常駐など、
+必要なページを邪魔になりにくい形で開いておくための機能を備えています。
+画面全体は青黒を基調とした半透明のダークテーマで統一しています。
 
-### 使い方
+### 主な特徴
 
-1. URL欄にサイトのアドレスを入力し、［開く］または Enter を押します。［ブックマーク］→［現在のページをホームページに設定］で、そのURLを起動時とホームアイコンで開くホーム画面にできます。
-   ［＋］または［ブラウザ］→［新しいタブ］で別サイトを開くタブを追加できます。各タブの［×］で閉じられ、固定のタブ数上限はありません。
-2. ［ブックマーク］→［このページをブックマークに追加］で登録します。フォルダを開いて登録済みサイトを選べます。
-3. ［ブックマーク整理］では Chrome / Edge / HTMLからのインポート、HTMLへのエクスポート、全削除を行えます。
-4. ［設定］→［常に前面に表示］をオンにすると、ゲームの上へ表示できます。
-5. 透明度はURL欄右側のスライダーで調整します。
-6. 右下の銅色マーカーをドラッグすると、画面サイズを変更できます。
-7. ［設定］→［Windowsの起動時にタスクトレイへ常駐］をオンにすると、次回のWindowsサインイン時はタスクトレイから起動します。トレイアイコンを右クリックして［表示］［ヘルプ / Help］［終了］を選べます。
-8. ページ上で右クリックし、［ページを翻訳］を選ぶと現在のタブをGoogle翻訳のページ翻訳表示へ切り替えられます。ログインが必要なサイトやCloudflareなどのアクセス保護があるサイトは、Google翻訳側で表示できない場合があります。その場合は［Geminiで本文を翻訳（別画面）］を使います。
-   翻訳結果の話し方や説明の詳しさは［設定］→［翻訳のカスタマイズ］から設定できます。これは［Geminiでページを翻訳］でだけ使われ、入力した文章とページ内の表示文章がGemini APIへ送信されます。画像・CSS・スクリプトは送信しません。Gemini翻訳後に元へ戻す時は再読み込みします。APIキーやパスワードは入力しないでください。
+#### オーバーレイ表示
 
-### Chrome / Edge ブックマークとの連携
+- ウィンドウの透明度を35%から100%まで調整
+- ［設定］から常に最前面に表示するかを切り替え
+- ウィンドウの移動、最大化、最小化、サイズ変更に対応
+- タイトルバー、タブ、メニュー、ダイアログを統一したダークテーマ
+- 閉じるボタンで画面を隠し、タスクトレイへ常駐
+- Windowsへのサインイン時に、画面を開かずタスクトレイで起動可能
 
-- **Chromeからインポート / Edgeからインポート**: ［ブックマーク整理］から各ブラウザの既定プロファイル（`Default`）を読み込みます。
-- **HTMLファイルからインポート**: 別プロファイルやバックアップのブックマークHTMLを取り込む時に使います。
-- **Chrome / Edge 用HTMLへエクスポート**: 出力したHTMLファイルをChromeまたはEdgeのブックマーク管理画面からインポートできます。
+#### ブラウザ機能
 
-### 動作環境
+- ChromiumベースのWeb表示
+- 複数タブの追加、切り替え、個別終了
+- 戻る、進む、ホーム、再読み込み、外部ブラウザで開く
+- `https://`を省略したURL入力
+- 起動時とホームボタンで開くホームURLを設定
+- 最後に開いたURLを保存
+- HTML、テキスト、Markdown、JSON、XML、PDF、
+  画像ファイルをWindowsの［プログラムから開く］から表示
+
+［プログラムから開く］へ登録する拡張子は、
+- `.htm`、`.html`、`.txt`、`.md`、`.json`、`.xml`、`.pdf`、`.png`、`.jpg`、`.jpeg`、`.gif`、`.webp`です。
+インストール時に既定のアプリは変更しません。
+
+#### ブックマーク
+
+- 表示中のページをブックマークへ追加
+- フォルダ階層を保ったブックマーク一覧
+- ブックマークの追加、名前変更、移動、削除
+- ［設定］→［ブックマークバーを固定表示］で、ブックマークを画面上部へ常時表示
+- ChromeまたはEdgeの既定プロファイルからインポート
+- Chrome / Edge互換のブックマークHTMLをインポート、エクスポート
+- 重複URLを避けながら既存ブックマークへ統合
+
+#### ページ翻訳
+
+- 右クリックの［ページを翻訳］でGoogle翻訳のページ表示へ切り替え
+- ［Geminiでページを翻訳］で、元のレイアウトを保ったまま表示文章を置き換え
+- Windowsの表示言語を翻訳先として自動選択
+- 翻訳の文体や固有名詞の扱いをカスタマイズ
+- Gemini APIの混雑時に、再試行または代替モデルへの切り替えを選択
+- 翻訳結果はページを再読み込みすると元の表示へ復元
+- 翻訳手順と注意事項を日本語・英語のヘルプで表示
+
+通常の閲覧とGoogle翻訳にはGemini APIキーは不要です。
+Gemini翻訳を利用する場合だけ、利用者自身のGemini APIキーが必要です。
+
+### インストール
+
+#### 必要な環境
 
 - Windows 10 / 11
 - 64bit Windows
-- Microsoft Visual C++ 2015-2022 再頒布可能パッケージ（x64）
-- .NET 10 SDK（ソースからビルドする場合）
 
-ゲーム側は、ウィンドウ表示またはボーダーレスウィンドウ表示での利用をおすすめします。排他的フルスクリーンでは、Windowsの表示仕様により最前面表示が効かない場合があります。ブラウザをクリックした間は、ゲームではなくブラウザが入力を受け取ります。
+配布用インストーラーは.NETランタイムとChromium関連ファイルを含む自己完結型です。
+通常のインストールでは、.NET SDKを別途導入する必要はありません。
 
-### ビルド
+#### 手順
+
+1. このリポジトリのReleasesから`setup.exe`と`Setup.msi`を同じフォルダへダウンロードします。
+   ZIPで配布されている場合は、先にすべて展開します。
+2. 起動中のOverlay Browserを終了します。
+3. `setup.exe`を実行します。`Setup.msi`を直接実行することもできます。
+4. インストール後、デスクトップまたはスタートメニューのショートカットから起動します。
+
+以前のバージョンがインストールされている場合は、新しいインストーラーから更新できます。
+アンインストールはWindowsの［インストールされているアプリ］または［プログラムと機能］から行えます。
+
+### 証明書なしインストーラーの警告
+
+現在配布している`setup.exe`、`Setup.msi`およびアプリ本体には、
+発行元をWindowsへ証明するコード署名証明書を付けていません。
+
+そのため、ダウンロード後の初回実行時にMicrosoft Defender SmartScreenが、
+次のような警告を表示する場合があります。
+
+- 「WindowsによってPCが保護されました」
+- 「認識されないアプリの起動を停止しました」
+- 「発行元を確認できません」
+
+これは、署名や配布実績に基づく信頼情報が不足している時に表示される警告です。
+警告が表示されたことだけで、マルウェアと判定されたという意味ではありません。一方で、
+署名がないことはファイルの安全性を保証するものでもありません。
+
+次の条件をすべて確認できる場合に限り、［詳細情報］→［実行］を選択してください。
+
+- このリポジトリのReleases、または信頼できる管理者から入手した
+- ファイル名だけでなく、配布元とリリース内容を確認した
+- SHA-256が公開されている場合は、ダウンロードしたファイルのハッシュと一致している
+
+不明なWebサイト、チャット、メールなどから入手した同名ファイルでは実行しないでください。
+組織のポリシーやWindowsのSmart App Controlによって実行が禁止されている場合は、
+保護機能を無効にせず管理者へ確認してください。
+
+MicrosoftによるSmartScreenの説明は、
+[SmartScreen reputation for Windows app developers]
+(https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
+を参照してください。
+
+### 翻訳機能とデータの扱い
+
+- アプリ設定とブックマークは`%LOCALAPPDATA%\OverlayBrowser\settings.json`へ保存します。
+- Gemini APIキーはJSONファイルではなく、Windows資格情報マネージャーへ保存します。
+- ［Geminiでページを翻訳］を実行した時だけ、翻訳のカスタマイズ内容とページ内の表示文章をGemini APIへ送信します。
+- Gemini翻訳では、画像、CSS、スクリプトを送信しません。
+- ［ページを翻訳］では、表示中ページのURLをGoogle翻訳のページ表示に使用します。
+- 翻訳のカスタマイズ欄へAPIキー、パスワード、個人情報などを入力しないでください。
+
+ログインが必要なページやアクセス制限のあるページは、翻訳サービス側の制約により表示または翻訳できない場合があります。
+
+### ソースからのビルド
+
+#### 必要なもの
+
+- .NET 10 SDK
+- 64bit Windows
+- Visual Studioからインストーラーを作成する場合は、Visual Studio Installer Projects拡張機能
+
+#### アプリをビルド
 
 ```powershell
-dotnet build OverlayBrowser/OverlayBrowser.csproj
+dotnet restore OverlayBrowser/OverlayBrowser.csproj
+dotnet build OverlayBrowser/OverlayBrowser.csproj -c Release
 ```
 
-### 実行するEXEと出力先
-
-このプロジェクトは Chromium / CefSharp の64bit部品を使用するため、`win-x64` を指定してビルドします。そのため、通常のWPFアプリでよく使う `bin/Release/net10.0-windows/` 直下ではなく、次の場所に出力されます。
-
-| 目的 | 実行ファイル | 更新される操作 |
-| --- | --- | --- |
-| 開発中の簡易確認 | `OverlayBrowser/bin/Release/net10.0-windows/win-x64/OverlayBrowser.exe` | Visual Studio の「リビルド」または `dotnet build` |
-| 普段使う完成版・配布用 | `OverlayBrowser/bin/Release/net10.0-windows/win-x64/publish/OverlayBrowser.exe` | 「発行」または `dotnet publish` |
-
-普段の起動、ショートカットの作成、他のPCへ渡す用途には、**`publish` フォルダ内の `OverlayBrowser.exe`** を使ってください。`publish` はインターネットへ公開する操作ではなく、実行に必要なDLLやChromium部品を1つのフォルダへ揃える「完成版の作成」です。
-
-`OverlayBrowser.exe` だけを別の場所へコピーせず、`publish` フォルダの中身をまとめて扱ってください。CefSharpのDLL、`locales`、`runtimes` なども起動に必要です。
-
-#### 完成版を作り直す
-
-Visual Studioで発行プロファイルを使うか、プロジェクトのルートで次を実行します。
+#### 自己完結型の配布フォルダを作成
 
 ```powershell
-dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained false
+dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained true
 ```
 
-### インストーラー
+出力先は次のフォルダです。
 
-Visual Studio Installer Projectsを導入したVisual Studioで `OverlayBrowser.sln` を開き、構成を `Release` にして `Installer` プロジェクトをビルドします。
+```text
+OverlayBrowser/bin/Release/net10.0-windows/win-x64/publish/
+```
 
-- `Installer/Release/Setup.msi`: Windows Installer本体
-- `Installer/Release/setup.exe`: `Setup.msi`を起動するブートストラッパー
+CefSharpとChromiumは複数のDLL、実行ファイル、言語ファイルを必要とします。
+`OverlayBrowser.exe`だけを別の場所へコピーせず、`publish`フォルダ全体を扱ってください。
 
-`Installer` は `OverlayBrowser/Properties/PublishProfiles/Installer.pubxml` を使用し、.NETランタイム、CefSharp、Chromium部品を含む64bit向けの自己完結型アプリを収録します。インストール先はユーザー単位で、デスクトップとスタートメニューへショートカットを作成します。
+#### MSIインストーラーを作成
 
-従来の `Setup/OverlayBrowser.iss` は、Inno Setup 6を利用する場合の代替定義として残しています。
+1. Visual Studio Installer Projects拡張機能を導入します。
+2. Visual Studioで`OverlayBrowser.sln`を開きます。
+3. 構成を`Release`にします。
+4. `Installer`プロジェクトをリビルドします。
 
-インストーラーはアプリ本体のアイコンを利用し、Windowsの「インストールされているアプリ」およびアンインストール画面にも同じアイコンを表示します。
+生成先:
 
-### 証明書なしのインストーラー警告について
+- `Installer/Release/setup.exe`
+- `Installer/Release/Setup.msi`
 
-現在のインストーラーには、発行元をWindowsへ証明する**コード署名証明書**を付けていません。そのため、初回起動時やダウンロード直後に Microsoft Defender SmartScreen などが「保護されました」「発行元を確認できません」といった警告を表示することがあります。これは署名がないために表示される警告であり、警告だけではマルウェアと判定されたことを意味しません。
+`Setup/OverlayBrowser.iss`は、Inno Setup 6を使用する場合の代替定義です。
 
-ただし、安全が保証されるわけではありません。インストーラーは、このリポジトリのリリースまたは信頼できる作成者から入手したものだけを使用してください。不明なサイト、チャット、メールなどから受け取った同名ファイルでは［詳細情報］→［実行］を選ばないでください。
+### サードパーティ製ソフトウェア / NuGet
 
-ソースから自分で作成する場合は、以下の手順で内容を確認できます。
+このプロジェクトが現在使用しているNuGetパッケージは次のとおりです。
+`CefSharp.Wpf.NETCore`が直接参照で、残りはそこから復元される間接依存関係です。
 
-1. リポジトリのソースを確認する。
-2. Visual Studioで `OverlayBrowser.sln` を開く。
-3. `Release` 構成で `Installer` プロジェクトをビルドする。
+| パッケージ | バージョン | 用途 | ライセンス |
+| --- | ---: | --- | --- |
+| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/150.0.110) | 150.0.110 | WPF用Chromiumブラウザコントロール | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/150.0.110) | 150.0.110 | CefSharp共通ランタイム | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/150.0.11) | 150.0.11 | Chromium Embedded Framework共通ランタイム | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/150.0.11) | 150.0.11 | Windows x64向けCEFネイティブファイル | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
 
-将来、コード署名証明書を導入して署名したリリースでは、この警告が減る場合があります。ただし、SmartScreenの表示は署名の有無だけでなく、配布実績などにも影響されます。
+CefSharpはChromium Embedded Framework（CEF）を使用し、CEFはChromiumおよび複数のオープンソースコンポーネントを含みます。
+それぞれの著作権とライセンスは各権利者に帰属します。詳しくは
+[CefSharp](https://github.com/cefsharp/CefSharp)、
+[CEF](https://github.com/chromiumembedded/cef)、
+[Chromiumのライセンス](https://chromium.googlesource.com/chromium/src/+/main/LICENSE)を参照してください。
+
+---
 
 ## English
 
-Overlay Browser is a lightweight Windows browser for keeping guides, chat, maps, stream pages, work documents, or other sites beside any app. Import the sites you already use in Chrome or Edge, then keep only the page you need on screen.
+### Overview
 
-### Features
+Overlay Browser is a Windows desktop browser designed to keep webpages and local files visible beside other applications.
 
-- Open a URL directly; the `https://` prefix is optional
-- Add and switch between multiple tabs with no fixed tab limit
-- Open a chosen home URL at startup or from the Home button
-- Save the current page as a bookmark
-- Import bookmarks from Chrome or Edge's default profile
-- Export bookmarks as standard HTML that Chrome and Edge can import
-- Toggle Always on top from Settings
+It provides adjustable opacity, always-on-top display, multiple tabs, a pinned bookmark bar, 
+and notification-area operation. The interface uses a consistent translucent dark theme based on deep blue, cyan, and violet.
+
+### Main features
+
+#### Overlay display
+
 - Adjust window opacity from 35% to 100%
-- Resize the window by dragging the copper marker at the bottom-right corner
-- Start in the Windows notification area after sign-in from Settings
-- Show the window, open Help, or exit from the notification area icon
-- The window close button hides the window in the notification area; explicit Exit asks for confirmation
-- Save the last URL, opacity, overlay setting, Windows startup setting, and bookmarks locally
-- Built-in help in Japanese and English
-- Use the right-click Translate page command to replace the current tab with Google's translated page
-- Store the Gemini API key in Windows Credential Manager; visible page text and the saved instruction are sent to Gemini only for Translate page with Gemini
-- Save translation tone, detail level, and game-term preferences from Settings → Translation customization
+- Toggle always-on-top display from Settings
+- Move, maximize, minimize, and resize the window
+- Consistent dark theme for the title bar, tabs, menus, and dialogs
+- Hide the window in the notification area with the Close button
+- Start in the notification area without opening the main window at Windows sign-in
 
-### Build
+#### Browser
 
-```powershell
-dotnet build OverlayBrowser/OverlayBrowser.csproj
-```
+- Chromium-based web rendering
+- Add, switch, and close multiple tabs
+- Back, Forward, Home, Reload, and Open in external browser commands
+- Enter URLs without the `https://` prefix
+- Set a home URL for startup and the Home button
+- Restore the last opened URL
+- Open HTML, text, Markdown, JSON, XML, PDF, and image files through Windows **Open with**
 
-### Which EXE should I run?
+The installer registers Overlay Browser as an **Open with** option for 
+- `.htm`, `.html`, `.txt`, `.md`, `.json`, `.xml`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif`, and `.webp`. 
+It does not change the default application for these file types.
 
-This project targets `win-x64` because Chromium / CefSharp includes 64-bit native components. Build output is therefore placed below `bin/Release/net10.0-windows/win-x64/`, rather than directly below `bin/Release/net10.0-windows/`.
+#### Bookmarks
 
-| Purpose | Executable | Updated by |
-| --- | --- | --- |
-| Quick development check | `OverlayBrowser/bin/Release/net10.0-windows/win-x64/OverlayBrowser.exe` | Visual Studio **Rebuild** or `dotnet build` |
-| Normal use and distribution | `OverlayBrowser/bin/Release/net10.0-windows/win-x64/publish/OverlayBrowser.exe` | Visual Studio **Publish** or `dotnet publish` |
+- Add the current page to bookmarks
+- Keep bookmarks in a folder hierarchy
+- Add, rename, move, and delete bookmarks
+- Pin bookmarks below the menu bar with **Settings → Pin bookmark bar**
+- Import the default Chrome or Edge profile
+- Import and export Chrome / Edge-compatible bookmark HTML
+- Merge imported bookmarks while avoiding duplicate URLs
 
-For normal use, shortcuts, and sharing the application, use **`OverlayBrowser.exe` inside the `publish` folder**. `publish` does not upload or release the application to the internet. It creates a complete runnable folder containing the EXE and all required files.
+#### Page translation
 
-Do not copy only `OverlayBrowser.exe`. Keep the whole `publish` folder together because CefSharp requires its DLLs, `locales`, `runtimes`, and other Chromium files.
+- Open the current page through Google Translate from the right-click **Translate page** command
+- Replace visible text while preserving the original layout with **Translate page with Gemini**
+- Automatically use the Windows display language as the target language
+- Customize translation style and treatment of proper names
+- Retry or select an alternative model when the Gemini API is busy
+- Reload the page to restore the original text
+- Read translation setup and safety information in Japanese and English help
 
-#### Create a fresh runnable build
+Normal browsing and Google Translate do not require a Gemini API key. A user-provided Gemini API key is required only for Gemini translation.
 
-Use a Visual Studio publish profile, or run this from the repository root:
+### Installation
 
-```powershell
-dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained false
-```
+#### Requirements
 
-### Installer
+- Windows 10 / 11
+- 64-bit Windows
 
-Open `OverlayBrowser.sln` in Visual Studio with the Visual Studio Installer Projects extension installed. Select the `Release` configuration and build the `Installer` project.
+The distributed installer contains a self-contained build with the .NET runtime and Chromium files. 
+The .NET SDK is not required for normal installation.
 
-- `Installer/Release/Setup.msi`: Windows Installer package
-- `Installer/Release/setup.exe`: bootstrapper that starts `Setup.msi`
+#### Steps
 
-The installer uses `OverlayBrowser/Properties/PublishProfiles/Installer.pubxml` and packages a self-contained 64-bit build including .NET, CefSharp, and Chromium components. It creates desktop and Start menu shortcuts and uses the Overlay Browser icon for shortcuts and the Windows uninstall entry.
+1. Download both `setup.exe` and `Setup.msi` from this repository's Releases page into the same folder. 
+   If they are provided in a ZIP archive, extract all files first.
+2. Exit any running instance of Overlay Browser.
+3. Run `setup.exe`. You can also run `Setup.msi` directly.
+4. Start Overlay Browser from the desktop or Start menu shortcut.
 
-The existing `Setup/OverlayBrowser.iss` remains available as an alternative definition for Inno Setup 6.
+If an earlier version is already installed, the new installer can update it. 
+Use Windows **Installed apps** or **Programs and Features** to uninstall the application.
 
 ### Unsigned installer warning
 
-The current installer is **not code-signed** with a certificate that identifies its publisher to Windows. Microsoft Defender SmartScreen or another Windows security feature may therefore show a warning such as *Windows protected your PC* or *Publisher could not be verified* when the installer is downloaded or first run. This warning is expected for an unsigned installer; by itself, it does not mean that the file has been identified as malware.
+The currently distributed `setup.exe`, `Setup.msi`, 
+and application binaries are **not code-signed** with a certificate that proves the publisher's identity to Windows.
 
-It is not a guarantee of safety, however. Only use an installer obtained from this repository's release or directly from a trusted maintainer. Do not select **More info → Run anyway** for a file with the same name received from an unknown web site, chat, or email.
+Microsoft Defender SmartScreen may therefore show a warning during the first run after download, including:
 
-If you build the installer yourself, you can inspect the source and create it with the following steps:
+- *Windows protected your PC*
+- *Microsoft Defender SmartScreen prevented an unrecognized app from starting*
+- *Publisher could not be verified*
 
-1. Review the repository source.
+This is a reputation warning shown when Windows does not have enough trust information based on a signature and distribution history. 
+The warning alone does not mean that the file has been identified as malware. 
+However, the absence of a signature is not proof that a file is safe.
+
+Select **More info → Run anyway** only after confirming all of the following:
+
+- The file came from this repository's Releases page or a trusted administrator.
+- You verified the download source and release details, not only the file name.
+- If a SHA-256 value is published, it matches the downloaded file.
+
+Do not run a file with the same name obtained from an unknown website, 
+chat, or email. If an organizational policy or Windows Smart App Control blocks the file, 
+do not disable the protection; contact the administrator instead.
+
+See Microsoft's [SmartScreen reputation for Windows app developers]
+(https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) for details.
+
+### Translation and data handling
+
+- Application settings and bookmarks are stored in `%LOCALAPPDATA%\OverlayBrowser\settings.json`.
+- The Gemini API key is stored in Windows Credential Manager, not in the JSON settings file.
+- The saved translation preference and visible webpage text are sent to the Gemini API only when **Translate page with Gemini** is selected.
+- Gemini translation does not send images, CSS, or scripts.
+- **Translate page** uses the current page URL to open the Google Translate page view.
+- Do not enter API keys, passwords, personal data, or other secrets in the translation preference field.
+
+Pages that require sign-in or enforce access restrictions may not be available through an external translation service.
+
+### Build from source
+
+#### Requirements
+
+- .NET 10 SDK
+- 64-bit Windows
+- Visual Studio Installer Projects extension when building the MSI installer
+
+#### Build the application
+
+```powershell
+dotnet restore OverlayBrowser/OverlayBrowser.csproj
+dotnet build OverlayBrowser/OverlayBrowser.csproj -c Release
+```
+
+#### Create a self-contained distribution folder
+
+```powershell
+dotnet publish OverlayBrowser/OverlayBrowser.csproj -c Release -r win-x64 --self-contained true
+```
+
+Output:
+
+```text
+OverlayBrowser/bin/Release/net10.0-windows/win-x64/publish/
+```
+
+CefSharp and Chromium require multiple DLLs, executables, locale files, and resources. 
+Do not copy `OverlayBrowser.exe` by itself; keep the complete `publish` folder together.
+
+#### Build the MSI installer
+
+1. Install the Visual Studio Installer Projects extension.
 2. Open `OverlayBrowser.sln` in Visual Studio.
-3. Build the `Installer` project in the `Release` configuration.
+3. Select the `Release` configuration.
+4. Rebuild the `Installer` project.
 
-A future release that uses a code-signing certificate may show fewer warnings. SmartScreen decisions can also depend on distribution reputation, not only on whether a file is signed.
+Output:
 
-For the most reliable overlay behavior, use games in windowed or borderless-window mode. Exclusive fullscreen mode can prevent a normal Windows topmost window from being displayed above the game.
+- `Installer/Release/setup.exe`
+- `Installer/Release/Setup.msi`
 
-### Home page
+`Setup/OverlayBrowser.iss` is retained as an alternative definition for Inno Setup 6.
 
-Open the site you want, then select **Bookmarks → Set current page as home**. That URL opens when the app starts and whenever you select the Home button. Until a home URL is set, the app continues to open the last page you used at startup.
+### Third-party software / NuGet
 
-### Start with Windows
+The project currently restores the following NuGet packages. `CefSharp.Wpf.NETCore` is the direct package reference; the other packages are transitive dependencies.
 
-Select **Settings → Start with Windows and stay in the notification area**. At your next Windows sign-in, the app starts without opening its main window and remains available from the notification area icon. Right-click that icon to choose **Show**, **Help**, or **Exit**.
+| Package | Version | Purpose | License |
+| --- | ---: | --- | --- |
+| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/150.0.110) | 150.0.110 | Chromium browser control for WPF | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/150.0.110) | 150.0.110 | Shared CefSharp runtime | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/150.0.11) | 150.0.11 | Shared Chromium Embedded Framework runtime | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/150.0.11) | 150.0.11 | Native CEF files for Windows x64 | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
 
-### Translation
-
-Right-click a web page and select **Translate page** to replace the current tab with Google's translated page. Some pages, including pages that require a sign-in, may not be available through Google Translate. Select **Translate page with Gemini** to replace visible text while keeping the original layout. Reload to restore the original text. Open **Help → Translation Help** for setup and privacy details.
-
-Use **Settings → Translation customization** to save your preferred tone, level of explanation, and treatment of game terms. Your saved instruction and visible page text are sent to Gemini only when you select **Translate page with Gemini**. Images, CSS, and scripts are not sent. Do not enter API keys, passwords, or other secrets in the customization field.
+CefSharp uses the Chromium Embedded Framework (CEF), and CEF includes Chromium and other open-source components. Their copyrights and licenses remain with their respective owners. See [CefSharp](https://github.com/cefsharp/CefSharp), 
+[CEF](https://github.com/chromiumembedded/cef), and the 
+[Chromium license](https://chromium.googlesource.com/chromium/src/+/main/LICENSE) for details.
