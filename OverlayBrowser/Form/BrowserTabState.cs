@@ -56,6 +56,11 @@ public sealed class BrowserTabState : IDisposable
     public TextBlock HeaderTextBlock { get; }
 
     /// <summary>
+    /// タブを作成した直後の最初のページ読み込みが完了したかどうか。
+    /// </summary>
+    public bool HasCompletedInitialLoad { get; set; }
+
+    /// <summary>
     /// タブで使用したブラウザを破棄する。
     /// </summary>
     public void Dispose()

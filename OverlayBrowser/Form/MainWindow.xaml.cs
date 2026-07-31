@@ -140,7 +140,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        browserTab.LoadingOverlay.Visibility = Visibility.Visible;
         browserTab.Browser.Address = url;
     }
 
@@ -296,7 +295,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        browserTab.LoadingOverlay.Visibility = Visibility.Visible;
         browserTab.Browser.Back();
     }
 
@@ -313,7 +311,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        browserTab.LoadingOverlay.Visibility = Visibility.Visible;
         browserTab.Browser.Forward();
     }
 
@@ -328,7 +325,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        browserTab.LoadingOverlay.Visibility = Visibility.Visible;
         browserTab.Browser.Reload();
     }
 
@@ -1151,9 +1147,10 @@ public partial class MainWindow : Window
                 return;
             }
 
-            browserTab.LoadingOverlay.Visibility = e.IsLoading ? Visibility.Visible : Visibility.Collapsed;
             if (!e.IsLoading)
             {
+                browserTab.HasCompletedInitialLoad = true;
+                browserTab.LoadingOverlay.Visibility = Visibility.Collapsed;
                 UpdateTabHeader(browserTab);
             }
 
@@ -1222,6 +1219,24 @@ public partial class MainWindow : Window
 
         UrlTextBox.Text = url;
         browser.Address = url;
+        _ = ShowInitialLoadingOverlayAsync(browserTab);
+    }
+
+    /// <summary>
+    /// 新しいタブの初回読み込みが長引いた時だけ準備表示を出す。
+    /// </summary>
+    /// <param name="browserTab">表示状態を確認するタブ。</param>
+    private async Task ShowInitialLoadingOverlayAsync(BrowserTabState browserTab)
+    {
+        await Task.Delay(400);
+        if (browserTab.HasCompletedInitialLoad ||
+            !browserTabs.Values.Contains(browserTab) ||
+            !browserTab.Browser.IsLoading)
+        {
+            return;
+        }
+
+        browserTab.LoadingOverlay.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -1262,6 +1277,7 @@ public partial class MainWindow : Window
             Background = System.Windows.Media.Brushes.Transparent,
             IsHitTestVisible = false,
             Opacity = OpacitySlider.Value,
+            Visibility = Visibility.Collapsed,
             Child = loadingCard
         };
     }
@@ -1362,11 +1378,6 @@ public partial class MainWindow : Window
 
         var targetLanguage = translationTargetCulture.TwoLetterISOLanguageName;
         var translatedUrl = $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(pageUrl)}";
-        if (FindBrowserTab(browser) is { } browserTab)
-        {
-            browserTab.LoadingOverlay.Visibility = Visibility.Visible;
-        }
-
         browser.Address = translatedUrl;
     }
 

@@ -1,6 +1,6 @@
 ; Inno Setup 6 用のインストーラー定義。Release publish の出力を配布対象にする。
 #define MyAppName "Overlay Browser"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Overlay Browser"
 #define MyAppExeName "OverlayBrowser.exe"
 

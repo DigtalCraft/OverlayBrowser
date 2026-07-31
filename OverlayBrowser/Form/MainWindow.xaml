@@ -50,7 +50,22 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <ContentPresenter ContentSource="Header"
+                                    <Path x:Name="CheckMark"
+                                          Width="12"
+                                          Height="10"
+                                          Margin="3,0,0,0"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          Data="M1,5 L4,8 L11,1"
+                                          Stroke="#78E6FF"
+                                          StrokeThickness="2"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Visibility="Collapsed" />
+                                    <ContentPresenter x:Name="HeaderPresenter"
+                                                      Margin="24,0,0,0"
+                                                      ContentSource="Header"
                                                       RecognizesAccessKey="True"
                                                       VerticalAlignment="Center"
                                                       TextElement.Foreground="{TemplateBinding Foreground}" />
@@ -66,7 +81,7 @@
                                 </Grid>
                             </Border>
                             <Border x:Name="TopLevelInsetDivider"
-                                    Width="2"
+                                    Width="3"
                                     Margin="0,7,-1,7"
                                     HorizontalAlignment="Right"
                                     IsHitTestVisible="False"
@@ -75,7 +90,8 @@
                                     <!-- 左を暗く、右をわずかに明るくして浅い溝に見せる。 -->
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                         <GradientStop Offset="0" Color="#081426" />
-                                        <GradientStop Offset="1" Color="#36516B" />
+                                        <GradientStop Offset="0.45" Color="#253B55" />
+                                        <GradientStop Offset="1" Color="#89A8C2" />
                                     </LinearGradientBrush>
                                 </Border.Background>
                             </Border>
@@ -108,10 +124,12 @@
                             <Trigger Property="Role" Value="TopLevelHeader">
                                 <Setter TargetName="PART_Popup" Property="Placement" Value="Bottom" />
                                 <Setter TargetName="TopLevelInsetDivider" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="HeaderPresenter" Property="Margin" Value="0" />
                                 <Setter Property="Padding" Value="14,9" />
                             </Trigger>
                             <Trigger Property="Role" Value="TopLevelItem">
                                 <Setter TargetName="TopLevelInsetDivider" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="HeaderPresenter" Property="Margin" Value="0" />
                                 <Setter Property="Padding" Value="14,9" />
                             </Trigger>
                             <Trigger Property="Role" Value="SubmenuHeader">
@@ -124,6 +142,9 @@
                             <Trigger Property="IsSubmenuOpen" Value="True">
                                 <Setter TargetName="MenuItemSurface" Property="Background" Value="#294C70" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#71839B" />
