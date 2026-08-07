@@ -47,6 +47,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         OpenCommand = new RelayCommand(_ => OpenAddress());
         OpenHomeCommand = new RelayCommand(_ => OpenHome());
         NewTabCommand = new RelayCommand(_ => Request(MainWindowRequestType.CreateTab, GetNewTabAddress()));
+        OpenInDefaultBrowserCommand = new RelayCommand(
+            _ => Request(MainWindowRequestType.OpenInDefaultBrowser, Address));
         ReloadCommand = new RelayCommand(_ => Request(MainWindowRequestType.Reload));
         BackCommand = new RelayCommand(_ => Request(MainWindowRequestType.GoBack), _ => CanGoBack);
         ForwardCommand = new RelayCommand(_ => Request(MainWindowRequestType.GoForward), _ => CanGoForward);
@@ -201,6 +203,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     public RelayCommand OpenCommand { get; }
     public RelayCommand OpenHomeCommand { get; }
     public RelayCommand NewTabCommand { get; }
+    public RelayCommand OpenInDefaultBrowserCommand { get; }
     public RelayCommand ReloadCommand { get; }
     public RelayCommand BackCommand { get; }
     public RelayCommand ForwardCommand { get; }

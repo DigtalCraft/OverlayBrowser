@@ -334,6 +334,8 @@
                 <MenuItem Header="ブラウザ">
                     <MenuItem Header="新しいタブ" Command="{Binding NewTabCommand}" />
                     <MenuItem Header="ホームを開く" Command="{Binding OpenHomeCommand}" />
+                    <!-- 決済や本人確認で埋め込みブラウザが使用できない場合に利用する。 -->
+                    <MenuItem Header="標準ブラウザで現在のページを開く" Command="{Binding OpenInDefaultBrowserCommand}" />
                     <Separator />
                     <MenuItem Header="再読み込み" Command="{Binding ReloadCommand}" />
                 </MenuItem>

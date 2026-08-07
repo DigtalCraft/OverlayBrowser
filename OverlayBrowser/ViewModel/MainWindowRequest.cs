@@ -7,6 +7,7 @@ public enum MainWindowRequestType
 {
     Navigate,
     CreateTab,
+    OpenInDefaultBrowser,
     Reload,
     GoBack,
     GoForward,

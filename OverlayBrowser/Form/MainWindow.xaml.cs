@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private readonly BrowserBookmarkTransferService bookmarkTransferService = new();
     private readonly BookmarkService bookmarkService = new();
     private readonly PageTranslationScriptService pageTranslationScriptService = new();
+    private readonly BrowserPopupLifeSpanHandler browserPopupLifeSpanHandler = new();
     private readonly TrayIconService trayIconService = new();
     private readonly GeminiApiKeyStore geminiApiKeyStore = new();
     private readonly GeminiTranslationService geminiTranslationService;
@@ -56,6 +57,8 @@ public partial class MainWindow : Window
     private MenuItem? bookmarkBarDropTargetMenuItem;
     private BookmarkBarDropPosition bookmarkBarDropPosition;
     private bool suppressBookmarkBarClick;
+    private int openedPopupCount;
+    private bool restoreTopmostAfterPopup;
     private readonly CultureInfo translationTargetCulture = CultureInfo.CurrentUICulture;
 
     /// <summary>
@@ -96,6 +99,8 @@ public partial class MainWindow : Window
         browserContextMenuHandler = new BrowserContextMenuHandler();
         browserContextMenuHandler.PageTranslationRequested += BrowserContextMenuHandler_PageTranslationRequested;
         browserContextMenuHandler.GeminiPageTranslationRequested += BrowserContextMenuHandler_GeminiPageTranslationRequested;
+        browserPopupLifeSpanHandler.PopupOpened += BrowserPopupLifeSpanHandler_PopupOpened;
+        browserPopupLifeSpanHandler.PopupClosed += BrowserPopupLifeSpanHandler_PopupClosed;
         trayIconService.ShowRequested += TrayIconService_ShowRequested;
         trayIconService.HelpRequested += TrayIconService_HelpRequested;
         trayIconService.ExitRequested += TrayIconService_ExitRequested;
@@ -132,6 +137,9 @@ public partial class MainWindow : Window
                 break;
             case MainWindowRequestType.CreateTab:
                 CreateBrowserTab(e.Value ?? viewModel.GetNewTabAddress());
+                break;
+            case MainWindowRequestType.OpenInDefaultBrowser:
+                OpenInDefaultBrowser(e.Value);
                 break;
             case MainWindowRequestType.Reload:
                 ReloadBrowser();
@@ -209,6 +217,49 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// ポップアップ表示中だけ常に前面表示を解除し、認証画面を見える位置へ表示する。
+    /// </summary>
+    /// <param name="sender">ポップアップ管理処理。</param>
+    /// <param name="e">イベント情報。</param>
+    private void BrowserPopupLifeSpanHandler_PopupOpened(object? sender, EventArgs e)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            openedPopupCount++;
+            if (openedPopupCount != 1)
+            {
+                return;
+            }
+
+            restoreTopmostAfterPopup = viewModel.IsTopmost;
+            if (restoreTopmostAfterPopup)
+            {
+                SetCurrentValue(TopmostProperty, false);
+            }
+        });
+    }
+
+    /// <summary>
+    /// すべてのポップアップが閉じた後に利用者の常に前面設定を復元する。
+    /// </summary>
+    /// <param name="sender">ポップアップ管理処理。</param>
+    /// <param name="e">イベント情報。</param>
+    private void BrowserPopupLifeSpanHandler_PopupClosed(object? sender, EventArgs e)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            openedPopupCount = Math.Max(0, openedPopupCount - 1);
+            if (openedPopupCount != 0 || !restoreTopmostAfterPopup)
+            {
+                return;
+            }
+
+            restoreTopmostAfterPopup = false;
+            SetCurrentValue(TopmostProperty, viewModel.IsTopmost);
+        });
+    }
+
+    /// <summary>
     /// 指定URLを選択中のブラウザへ表示する。
     /// </summary>
     /// <param name="url">表示するURL。</param>
@@ -227,6 +278,40 @@ public partial class MainWindow : Window
         }
 
         browserTab.Browser.Address = url;
+    }
+
+    /// <summary>
+    /// 埋め込みブラウザで利用できないページをWindowsの標準ブラウザで開く。
+    /// </summary>
+    /// <param name="url">標準ブラウザで開くURL。</param>
+    private void OpenInDefaultBrowser(string? url)
+    {
+        if (!UrlHelper.TryCreateUrl(url, out var browserUrl))
+        {
+            MessageBox.Show(
+                "標準ブラウザで開けるページがありません。",
+                "標準ブラウザで開く",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(browserUrl)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"Open default browser failed: {exception}");
+            MessageBox.Show(
+                "標準ブラウザを起動できませんでした。",
+                "標準ブラウザで開く",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>
@@ -1467,6 +1552,7 @@ public partial class MainWindow : Window
         };
         browser.AddressChanged += BrowserView_AddressChanged;
         browser.LoadingStateChanged += BrowserView_LoadingStateChanged;
+        browser.LifeSpanHandler = browserPopupLifeSpanHandler;
         browser.MenuHandler = browserContextMenuHandler;
 
         var pageBackground = new Border
