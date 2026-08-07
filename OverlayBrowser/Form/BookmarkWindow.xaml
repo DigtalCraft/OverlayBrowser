@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:model="clr-namespace:OverlayBrowser.Model"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="ブックマーク一覧"
+        Title="{Binding WindowTitle}"
         Width="700"
         Height="620"
         MinWidth="480"
@@ -90,9 +90,9 @@
                     BorderBrush="#233557"
                     BorderThickness="0,0,0,1">
                 <Grid>
-                    <TextBlock x:Name="WindowTitleTextBlock"
+                    <TextBlock
                                Margin="14,0"
-                               Text="ブックマーク一覧"
+                               Text="{Binding WindowTitle}"
                                FontWeight="SemiBold"
                                Foreground="#EDF6FF"
                                VerticalAlignment="Center" />
@@ -105,7 +105,7 @@
                             Background="Transparent"
                             BorderThickness="0"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                            Click="CloseButton_Click" />
+                            Command="{Binding CloseCommand}" />
                 </Grid>
             </Border>
 
@@ -116,8 +116,8 @@
                     BorderBrush="#3B5A77"
                     BorderThickness="1"
                     CornerRadius="5">
-                <TextBlock x:Name="GuideTextBlock"
-                           Text="フォルダの ▶ を押して開き、サイト名を選択してください。ダブルクリックでも開けます。"
+                <TextBlock
+                           Text="{Binding GuideText}"
                            Foreground="{StaticResource SubTextBrush}"
                            TextWrapping="Wrap" />
             </Border>
@@ -132,7 +132,7 @@
                 <TreeView x:Name="BookmarkTreeView"
                           Background="Transparent"
                           BorderThickness="0"
-                          ItemsSource="{Binding}"
+                          ItemsSource="{Binding Bookmarks}"
                           AllowDrop="True"
                           SelectedItemChanged="BookmarkTreeView_SelectedItemChanged"
                           MouseDoubleClick="BookmarkTreeView_MouseDoubleClick"
@@ -157,27 +157,34 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="SelectionTextBlock"
+                <TextBlock
                            Foreground="{StaticResource SubTextBrush}"
-                           Text="サイトを選択してください"
+                           Text="{Binding SelectionText}"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center" />
                 <Button Grid.Column="1"
                         x:Name="RootDestinationButton"
-                        Style="{StaticResource DialogButtonStyle}"
                         Content="トップへ追加"
-                        Visibility="Collapsed"
-                        Click="RootDestinationButton_Click" />
+                        Command="{Binding SelectRootCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource DialogButtonStyle}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDestinationSelection}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Grid.Column="2"
-                        x:Name="OpenButton"
                         Style="{StaticResource DialogButtonStyle}"
-                        Content="開く"
-                        IsEnabled="False"
-                        Click="OpenButton_Click" />
+                        Content="{Binding PrimaryButtonText}"
+                        Command="{Binding ConfirmCommand}" />
                 <Button Grid.Column="3"
                         Style="{StaticResource DialogButtonStyle}"
                         Content="閉じる"
-                        Click="CloseButton_Click" />
+                        Command="{Binding CloseCommand}" />
             </Grid>
         </Grid>
     </Border>

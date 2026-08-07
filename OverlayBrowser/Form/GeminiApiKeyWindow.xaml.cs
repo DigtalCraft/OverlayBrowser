@@ -1,6 +1,6 @@
-using System.ComponentModel;
 using System.Windows;
 using OverlayBrowser.Service;
+using OverlayBrowser.ViewModel;
 
 namespace OverlayBrowser.Form;
 
@@ -9,7 +9,7 @@ namespace OverlayBrowser.Form;
 /// </summary>
 public partial class GeminiApiKeyWindow : Window
 {
-    private readonly GeminiApiKeyStore apiKeyStore;
+    private readonly GeminiApiKeyWindowViewModel viewModel;
 
     /// <summary>
     /// APIキー設定画面を初期化する。
@@ -17,77 +17,41 @@ public partial class GeminiApiKeyWindow : Window
     /// <param name="apiKeyStore">APIキーの保存処理。</param>
     public GeminiApiKeyWindow(GeminiApiKeyStore apiKeyStore)
     {
-        this.apiKeyStore = apiKeyStore;
         InitializeComponent();
-        UpdateStatus();
+        viewModel = new GeminiApiKeyWindowViewModel(apiKeyStore);
+        viewModel.CloseRequested += ViewModel_CloseRequested;
+        viewModel.PasswordClearRequested += ViewModel_PasswordClearRequested;
+        DataContext = viewModel;
     }
 
     /// <summary>
-    /// 入力されたAPIキーを保存する。
+    /// PasswordBoxの入力値をViewModelへ渡して保存する。
     /// </summary>
     /// <param name="sender">イベントの発生元。</param>
     /// <param name="e">クリック時のイベント情報。</param>
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            apiKeyStore.SaveApiKey(ApiKeyPasswordBox.Password);
-            ApiKeyPasswordBox.Clear();
-            StatusTextBlock.Text = "Gemini APIキーを保存しました。";
-        }
-        catch (ArgumentException)
-        {
-            StatusTextBlock.Text = "APIキーを入力してください。";
-        }
-        catch (Win32Exception)
-        {
-            StatusTextBlock.Text = "APIキーを保存できませんでした。";
-        }
+        // PasswordBoxは安全な双方向Bindingを標準で提供しないため、入力値だけ画面側で受け渡す。
+        viewModel.SaveApiKey(ApiKeyPasswordBox.Password);
     }
 
     /// <summary>
-    /// 保存済みのAPIキーを削除する。
+    /// ViewModelからの依頼でパスワード入力欄を消去する。
     /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void DeleteButton_Click(object sender, RoutedEventArgs e)
+    /// <param name="sender">APIキー画面ViewModel。</param>
+    /// <param name="e">イベント情報。</param>
+    private void ViewModel_PasswordClearRequested(object? sender, EventArgs e)
     {
-        try
-        {
-            apiKeyStore.DeleteApiKey();
-            ApiKeyPasswordBox.Clear();
-            StatusTextBlock.Text = "保存済みのGemini APIキーを削除しました。";
-        }
-        catch (Win32Exception)
-        {
-            StatusTextBlock.Text = "APIキーを削除できませんでした。";
-        }
+        ApiKeyPasswordBox.Clear();
     }
 
     /// <summary>
-    /// 現在のAPIキー登録状態を表示する。
+    /// ViewModelからの依頼で画面を閉じる。
     /// </summary>
-    private void UpdateStatus()
+    /// <param name="sender">APIキー画面ViewModel。</param>
+    /// <param name="e">呼び出し元へ返す結果。</param>
+    private void ViewModel_CloseRequested(object? sender, DialogCloseRequestedEventArgs e)
     {
-        try
-        {
-            StatusTextBlock.Text = apiKeyStore.HasApiKey()
-                ? "Gemini APIキーは登録済みです。"
-                : "Gemini APIキーは未登録です。";
-        }
-        catch (Win32Exception)
-        {
-            StatusTextBlock.Text = "APIキーの登録状態を確認できませんでした。";
-        }
-    }
-
-    /// <summary>
-    /// 設定画面を閉じる。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
+        DialogResult = e.DialogResult;
     }
 }

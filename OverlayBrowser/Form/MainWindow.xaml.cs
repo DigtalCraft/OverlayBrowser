@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.Win32;
 using CefSharp;
@@ -11,6 +12,7 @@ using CefSharp.Wpf;
 using OverlayBrowser.Helper;
 using OverlayBrowser.Model;
 using OverlayBrowser.Service;
+using OverlayBrowser.ViewModel;
 using WpfMouseButtonEventHandler = System.Windows.Input.MouseButtonEventHandler;
 using WpfMouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using WpfMouseEventHandler = System.Windows.Input.MouseEventHandler;
@@ -35,43 +37,17 @@ public partial class MainWindow : Window
     }
 
     private const string ApplicationBookmarkFolderName = "このアプリで追加";
-    private const string CollectPageTextNodesScript = """
-        (() => {
-            const excludedTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'CODE', 'PRE', 'SVG']);
-            const textNodes = [];
-            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-                acceptNode(node) {
-                    const parent = node.parentElement;
-                    if (!parent || excludedTags.has(parent.tagName) || parent.isContentEditable || !node.nodeValue.trim()) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-
-                    const style = window.getComputedStyle(parent);
-                    return style.display === 'none' || style.visibility === 'hidden'
-                        ? NodeFilter.FILTER_REJECT
-                        : NodeFilter.FILTER_ACCEPT;
-                }
-            });
-
-            while (walker.nextNode()) {
-                textNodes.push(walker.currentNode);
-            }
-
-            window.__overlayBrowserTextNodes = textNodes;
-            return JSON.stringify(textNodes.map((node, index) => ({ id: index, text: node.nodeValue })));
-        })();
-        """;
-    private readonly SettingsService settingsService = new();
     private readonly BrowserBookmarkTransferService bookmarkTransferService = new();
-    private readonly WindowsStartupService windowsStartupService = new();
+    private readonly BookmarkService bookmarkService = new();
+    private readonly PageTranslationScriptService pageTranslationScriptService = new();
     private readonly TrayIconService trayIconService = new();
     private readonly GeminiApiKeyStore geminiApiKeyStore = new();
     private readonly GeminiTranslationService geminiTranslationService;
     private readonly BrowserContextMenuHandler browserContextMenuHandler;
+    private readonly MainWindowViewModel viewModel;
     private readonly Dictionary<TabItem, BrowserTabState> browserTabs = [];
     private readonly string? launchTarget;
     private readonly bool startHidden;
-    private AppSettings settings = new();
     private bool isExitConfirmed;
     private WpfPoint bookmarkBarDragStartPoint;
     private BookmarkItem? draggedBookmarkBarItem;
@@ -103,6 +79,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        viewModel = new MainWindowViewModel(new SettingsService(), new WindowsStartupService());
+        DataContext = viewModel;
+        viewModel.RequestRaised += ViewModel_RequestRaised;
+        viewModel.MessageRaised += ViewModel_MessageRaised;
+        viewModel.BookmarksChanged += ViewModel_BookmarksChanged;
+
         var arguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
         launchTarget = arguments.FirstOrDefault(argument =>
             !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase) &&
@@ -127,17 +109,8 @@ public partial class MainWindow : Window
     /// <param name="e">画面表示時のイベント情報。</param>
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        settings = settingsService.Load();
-        Topmost = settings.IsTopmost;
-        TopmostMenuItem.IsChecked = settings.IsTopmost;
-        windowsStartupService.MigrateLegacyEntry();
-        settings.IsStartWithWindows = windowsStartupService.IsEnabled();
-        StartWithWindowsMenuItem.IsChecked = settings.IsStartWithWindows;
-        BookmarkBarMenuItem.IsChecked = settings.IsBookmarkBarPinned;
-        UpdateBookmarkBarVisibility();
         UpdateBookmarkMenu();
-        OpacitySlider.Value = Math.Clamp(settings.Opacity, OpacitySlider.Minimum, OpacitySlider.Maximum);
-        CreateBrowserTab(GetStartupUrl());
+        CreateBrowserTab(viewModel.GetStartupAddress(launchTarget));
 
         if (startHidden)
         {
@@ -146,17 +119,106 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// URL入力欄の内容を検証して選択中のタブへ遷移する。
+    /// ViewModelから依頼された画面固有操作を実行する。
     /// </summary>
-    private void NavigateToInputUrl()
+    /// <param name="sender">メイン画面ViewModel。</param>
+    /// <param name="e">依頼された操作内容。</param>
+    private void ViewModel_RequestRaised(object? sender, MainWindowRequestEventArgs e)
     {
-        if (!UrlHelper.TryCreateUrl(UrlTextBox.Text, out var url))
+        switch (e.RequestType)
         {
-            MessageBox.Show("http または https のサイト URL を入力してください。", "URL を確認してください", MessageBoxButton.OK, MessageBoxImage.Information);
+            case MainWindowRequestType.Navigate:
+                NavigateBrowserTo(e.Value);
+                break;
+            case MainWindowRequestType.CreateTab:
+                CreateBrowserTab(e.Value ?? viewModel.GetNewTabAddress());
+                break;
+            case MainWindowRequestType.Reload:
+                ReloadBrowser();
+                break;
+            case MainWindowRequestType.GoBack:
+                NavigateBack();
+                break;
+            case MainWindowRequestType.GoForward:
+                NavigateForward();
+                break;
+            case MainWindowRequestType.AddBookmark:
+                AddBookmarkMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ImportChromeBookmarks:
+                ImportFromBrowser(BrowserType.Chrome, "Chrome");
+                break;
+            case MainWindowRequestType.ImportEdgeBookmarks:
+                ImportFromBrowser(BrowserType.Edge, "Edge");
+                break;
+            case MainWindowRequestType.ImportHtmlBookmarks:
+                ImportHtmlMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ExportBookmarks:
+                ExportHtmlMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ClearBookmarks:
+                ClearBookmarksMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ClearHistory:
+                ClearHistoryMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ClearCookies:
+                ClearCookiesMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ShowGeminiApiKey:
+                GeminiApiKeyMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ShowTranslationPersonalization:
+                TranslationPersonalizationMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ShowTranslationHelp:
+                TranslationHelpMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case MainWindowRequestType.ShowHelp:
+                OpenHelpWindow();
+                break;
+            case MainWindowRequestType.Exit:
+                RequestExit();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// ViewModelから通知されたメッセージを表示する。
+    /// </summary>
+    /// <param name="sender">メイン画面ViewModel。</param>
+    /// <param name="e">表示するメッセージ。</param>
+    private void ViewModel_MessageRaised(object? sender, UserMessageEventArgs e)
+    {
+        MessageBox.Show(
+            e.Message,
+            e.Title,
+            MessageBoxButton.OK,
+            e.MessageType == UserMessageType.Warning ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// ViewModelのブックマーク更新をメニューへ反映する。
+    /// </summary>
+    /// <param name="sender">メイン画面ViewModel。</param>
+    /// <param name="e">イベント情報。</param>
+    private void ViewModel_BookmarksChanged(object? sender, EventArgs e)
+    {
+        UpdateBookmarkMenu();
+    }
+
+    /// <summary>
+    /// 指定URLを選択中のブラウザへ表示する。
+    /// </summary>
+    /// <param name="url">表示するURL。</param>
+    private void NavigateBrowserTo(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
             return;
         }
 
-        UrlTextBox.Text = url;
         var browserTab = ActiveBrowserTab;
         if (browserTab is null)
         {
@@ -168,86 +230,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 開くボタンから URL 遷移する。
+    /// 選択中のブラウザを前のページへ戻す。
     /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void OpenButton_Click(object sender, RoutedEventArgs e)
+    private void NavigateBack()
     {
-        NavigateToInputUrl();
-    }
-
-    /// <summary>
-    /// ホームボタンから登録済みのホームURLを開く。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void HomeButton_Click(object sender, RoutedEventArgs e)
-    {
-        NavigateToHome();
-    }
-
-    /// <summary>
-    /// 新しいタブボタンからホームURLを開くタブを追加する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void NewTabButton_Click(object sender, RoutedEventArgs e)
-    {
-        CreateBrowserTab(GetNewTabUrl());
-    }
-
-    /// <summary>
-    /// URL 欄で Enter を押した時にサイトを開く。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">押下されたキーの情報。</param>
-    private void UrlTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
+        if (ActiveBrowserTab?.Browser is { CanGoBack: true } browser)
         {
-            NavigateToInputUrl();
+            browser.Back();
         }
     }
 
     /// <summary>
-    /// 再読み込みボタンから表示中のページを再読み込みする。
+    /// 選択中のブラウザを次のページへ進める。
     /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ReloadButton_Click(object sender, RoutedEventArgs e)
+    private void NavigateForward()
     {
-        ReloadBrowser();
-    }
-
-    /// <summary>
-    /// メニューから表示中のページを再読み込みする。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ReloadMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ReloadBrowser();
-    }
-
-    /// <summary>
-    /// メニューからホームURLを開く新しいタブを追加する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void NewTabMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        CreateBrowserTab(GetNewTabUrl());
-    }
-
-    /// <summary>
-    /// メニューから登録済みのホームURLを開く。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void OpenHomeMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        NavigateToHome();
+        if (ActiveBrowserTab?.Browser is { CanGoForward: true } browser)
+        {
+            browser.Forward();
+        }
     }
 
     /// <summary>
@@ -257,42 +258,7 @@ public partial class MainWindow : Window
     /// <param name="e">クリック時のイベント情報。</param>
     private void SetHomeMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (!UrlHelper.TryCreateUrl(UrlTextBox.Text, out var url))
-        {
-            MessageBox.Show("ホームに設定できる URL がありません。", "URL を確認してください", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        settings.HomeUrl = url;
-        settingsService.Save(settings);
-        MessageBox.Show("現在の URL をホームに設定しました。", "ホーム設定", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    /// <summary>
-    /// ホームURLを入力欄へ反映して表示する。
-    /// </summary>
-    private void NavigateToHome()
-    {
-        UrlTextBox.Text = string.IsNullOrWhiteSpace(settings.HomeUrl)
-            ? "https://www.google.com/"
-            : settings.HomeUrl;
-        NavigateToInputUrl();
-    }
-
-    /// <summary>
-    /// 起動時に表示するホームURLまたは前回のURLを取得する。
-    /// </summary>
-    /// <returns>起動時に開くURL。</returns>
-    private string GetStartupUrl()
-    {
-        if (UrlHelper.TryCreateBrowserAddress(launchTarget, out var launchAddress))
-        {
-            return launchAddress;
-        }
-
-        return string.IsNullOrWhiteSpace(settings.HomeUrl)
-            ? settings.LastUrl
-            : settings.HomeUrl;
+        viewModel.SetCurrentAddressAsHome();
     }
 
     /// <summary>
@@ -301,41 +267,7 @@ public partial class MainWindow : Window
     /// <returns>新規タブで開くURL。</returns>
     private string GetNewTabUrl()
     {
-        return string.IsNullOrWhiteSpace(settings.HomeUrl)
-            ? "https://www.google.com/"
-            : settings.HomeUrl;
-    }
-
-    /// <summary>
-    /// 前に表示していたページへ戻る。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void BackButton_Click(object sender, RoutedEventArgs e)
-    {
-        var browserTab = ActiveBrowserTab;
-        if (browserTab is null || !browserTab.Browser.CanGoBack)
-        {
-            return;
-        }
-
-        browserTab.Browser.Back();
-    }
-
-    /// <summary>
-    /// 次に表示していたページへ進む。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ForwardButton_Click(object sender, RoutedEventArgs e)
-    {
-        var browserTab = ActiveBrowserTab;
-        if (browserTab is null || !browserTab.Browser.CanGoForward)
-        {
-            return;
-        }
-
-        browserTab.Browser.Forward();
+        return viewModel.GetNewTabAddress();
     }
 
     /// <summary>
@@ -350,52 +282,6 @@ public partial class MainWindow : Window
         }
 
         browserTab.Browser.Reload();
-    }
-
-    /// <summary>
-    /// 常に前面に表示する設定を切り替える。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void TopmostMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        Topmost = TopmostMenuItem.IsChecked;
-    }
-
-    /// <summary>
-    /// Windowsサインイン時にタスクトレイへ常駐する設定を変更する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void StartWithWindowsMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            windowsStartupService.SetEnabled(StartWithWindowsMenuItem.IsChecked);
-            settings.IsStartWithWindows = StartWithWindowsMenuItem.IsChecked;
-            settingsService.Save(settings);
-        }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException)
-        {
-            StartWithWindowsMenuItem.IsChecked = windowsStartupService.IsEnabled();
-            MessageBox.Show(
-                "Windowsの起動設定を変更できませんでした。",
-                "設定",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
-    }
-
-    /// <summary>
-    /// ブックマークバーの固定表示を切り替えて設定を保存する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void BookmarkBarMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        settings.IsBookmarkBarPinned = BookmarkBarMenuItem.IsChecked;
-        UpdateBookmarkBarVisibility();
-        settingsService.Save(settings);
     }
 
     /// <summary>
@@ -480,67 +366,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 透明度スライダーの値を各表示領域へ反映する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">変更前後の透明度。</param>
-    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        // CefSharpはウィンドウ全体の透明度を継承しないため、各領域へ直接反映する。
-        Opacity = 1;
-        if (TitleBarSurface is not null)
-        {
-            TitleBarSurface.Opacity = e.NewValue;
-        }
-
-        if (MenuBarSurface is not null)
-        {
-            MenuBarSurface.Opacity = e.NewValue;
-        }
-
-        if (BookmarkBarSurface is not null)
-        {
-            BookmarkBarSurface.Opacity = e.NewValue;
-        }
-
-        if (ToolbarSurface is not null)
-        {
-            ToolbarSurface.Opacity = e.NewValue;
-        }
-
-        if (BrowserWorkspaceBackground is not null)
-        {
-            BrowserWorkspaceBackground.Opacity = e.NewValue;
-        }
-
-        foreach (var browserTab in browserTabs.Values)
-        {
-            browserTab.PageBackground.Opacity = e.NewValue;
-            browserTab.Browser.Opacity = e.NewValue;
-            browserTab.LoadingOverlay.Opacity = e.NewValue;
-            browserTab.TranslationOverlay.Opacity = e.NewValue;
-        }
-
-        if (OpacityTextBlock is not null)
-        {
-            OpacityTextBlock.Text = $"{e.NewValue:P0}";
-        }
-    }
-
-    /// <summary>
     /// 現在表示中の URL をブックマークに追加する。
     /// </summary>
     /// <param name="sender">イベントの発生元。</param>
     /// <param name="e">クリック時のイベント情報。</param>
     private void AddBookmarkMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (!UrlHelper.TryCreateUrl(UrlTextBox.Text, out var url))
+        if (!UrlHelper.TryCreateUrl(viewModel.Address, out var url))
         {
             MessageBox.Show("ブックマークに追加できる URL がありません。", "URL を確認してください", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        if (GetBookmarkUrls(settings.Bookmarks).Any(itemUrl =>
+        if (bookmarkService.GetUrls(viewModel.Bookmarks).Any(itemUrl =>
                 string.Equals(itemUrl, url, StringComparison.OrdinalIgnoreCase)))
         {
             var messageWindow = new TranslationMessageWindow(
@@ -554,7 +392,7 @@ public partial class MainWindow : Window
         }
 
         var name = ActiveBrowserTab?.Browser.Title;
-        var destinationWindow = new BookmarkWindow(settings.Bookmarks, isDestinationSelection: true)
+        var destinationWindow = new BookmarkWindow(viewModel.Bookmarks, isDestinationSelection: true)
         {
             Owner = this
         };
@@ -574,11 +412,10 @@ public partial class MainWindow : Window
         }
         else
         {
-            settings.Bookmarks.Add(bookmark);
+            viewModel.Bookmarks.Add(bookmark);
         }
 
-        settingsService.Save(settings);
-        UpdateBookmarkMenu();
+        viewModel.SaveBookmarks();
     }
 
     /// <summary>
@@ -589,26 +426,6 @@ public partial class MainWindow : Window
     private void BookmarkMenuItem_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         UpdateBookmarkMenu();
-    }
-
-    /// <summary>
-    /// Chromeの既定プロファイルからブックマークを取り込む。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ImportChromeMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ImportFromBrowser(BrowserType.Chrome, "Chrome");
-    }
-
-    /// <summary>
-    /// Edgeの既定プロファイルからブックマークを取り込む。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ImportEdgeMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ImportFromBrowser(BrowserType.Edge, "Edge");
     }
 
     /// <summary>
@@ -660,23 +477,13 @@ public partial class MainWindow : Window
 
         try
         {
-            bookmarkTransferService.ExportToHtml(dialog.FileName, settings.Bookmarks);
+            bookmarkTransferService.ExportToHtml(dialog.FileName, viewModel.Bookmarks);
             MessageBox.Show("Chrome と Edge で読み込めるHTML形式で書き出しました。", "エクスポート完了", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (IOException)
         {
             MessageBox.Show("ブックマークファイルを書き出せませんでした。", "エクスポート", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-    }
-
-    /// <summary>
-    /// 日本語と英語の操作説明を表示する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void HelpMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        OpenHelpWindow();
     }
 
     /// <summary>
@@ -697,7 +504,7 @@ public partial class MainWindow : Window
     /// <param name="e">クリック時のイベント情報。</param>
     private void TranslationPersonalizationMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var personalizationWindow = new TranslationPersonalizationWindow(settings.TranslationPersonalization)
+        var personalizationWindow = new TranslationPersonalizationWindow(viewModel.TranslationPersonalization)
         {
             Owner = this
         };
@@ -706,8 +513,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        settings.TranslationPersonalization = personalizationWindow.Personalization;
-        settingsService.Save(settings);
+        viewModel.SaveTranslationPersonalization(personalizationWindow.Personalization);
     }
 
     /// <summary>
@@ -719,16 +525,6 @@ public partial class MainWindow : Window
     {
         var translationHelpWindow = new TranslationHelpWindow { Owner = this };
         translationHelpWindow.ShowDialog();
-    }
-
-    /// <summary>
-    /// メニューバーから終了確認画面を表示する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        RequestExit();
     }
 
     /// <summary>
@@ -837,7 +633,7 @@ public partial class MainWindow : Window
     private void UpdateBookmarkMenu()
     {
         BookmarkMenuItem.Items.Clear();
-        if (settings.Bookmarks.Count == 0)
+        if (viewModel.Bookmarks.Count == 0)
         {
             BookmarkMenuItem.Items.Add(new MenuItem { Header = "ブックマークがありません", IsEnabled = false });
         }
@@ -845,7 +641,7 @@ public partial class MainWindow : Window
         {
             var openBookmarkListMenuItem = new MenuItem
             {
-                Header = $"ブックマーク一覧を開く（{CountBookmarkUrls(settings.Bookmarks)}件）"
+                Header = $"ブックマーク一覧を開く（{bookmarkService.CountUrls(viewModel.Bookmarks)}件）"
             };
             openBookmarkListMenuItem.Click += OpenBookmarkListMenuItem_Click;
             BookmarkMenuItem.Items.Add(openBookmarkListMenuItem);
@@ -863,7 +659,7 @@ public partial class MainWindow : Window
     private void UpdateBookmarkBar()
     {
         BookmarkBarMenu.Items.Clear();
-        if (settings.Bookmarks.Count == 0)
+        if (viewModel.Bookmarks.Count == 0)
         {
             BookmarkBarMenu.Items.Add(new MenuItem
             {
@@ -874,7 +670,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        foreach (var bookmark in settings.Bookmarks)
+        foreach (var bookmark in viewModel.Bookmarks)
         {
             BookmarkBarMenu.Items.Add(CreateBookmarkBarMenuItem(bookmark));
         }
@@ -997,13 +793,12 @@ public partial class MainWindow : Window
             Owner = this
         };
         if (confirmationWindow.ShowDialog() != true ||
-            !RemoveBookmark(settings.Bookmarks, bookmark))
+            !bookmarkService.Remove(viewModel.Bookmarks, bookmark))
         {
             return;
         }
 
-        settingsService.Save(settings);
-        UpdateBookmarkMenu();
+        viewModel.SaveBookmarks();
     }
 
     /// <summary>
@@ -1075,7 +870,7 @@ public partial class MainWindow : Window
         var target = targetMenuItem?.Tag as BookmarkItem;
         if (target is not null &&
             !ReferenceEquals(bookmark, target) &&
-            !ContainsBookmark(bookmark, target))
+            !bookmarkService.Contains(bookmark, target))
         {
             ClearBookmarkBarDropIndicator();
             bookmarkBarDropTarget = target;
@@ -1274,16 +1069,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// マウス位置にある固定ブックマークバーの項目を取得する。
-    /// </summary>
-    /// <param name="element">検索開始する画面要素。</param>
-    /// <returns>対象のブックマーク。見つからない場合はnull。</returns>
-    private static BookmarkItem? FindBookmarkBarItem(DependencyObject? element)
-    {
-        return FindBookmarkBarMenuItem(element)?.Tag as BookmarkItem;
-    }
-
-    /// <summary>
     /// 固定ブックマークバーの項目を指定位置へ移動する。
     /// </summary>
     /// <param name="source">移動するブックマーク。</param>
@@ -1297,13 +1082,13 @@ public partial class MainWindow : Window
         if (dropPosition != BookmarkBarDropPosition.Inside &&
             TryMoveBookmarkWithinSameList(source, target, dropPosition))
         {
-            settingsService.Save(settings);
+            viewModel.SaveBookmarks();
             return;
         }
 
         if (ReferenceEquals(source, target) ||
-            ContainsBookmark(source, target) ||
-            !RemoveBookmark(settings.Bookmarks, source))
+            bookmarkService.Contains(source, target) ||
+            !bookmarkService.Remove(viewModel.Bookmarks, source))
         {
             return;
         }
@@ -1312,7 +1097,7 @@ public partial class MainWindow : Window
         {
             target.Children.Add(source);
         }
-        else if (FindBookmarkList(settings.Bookmarks, target) is { } targetList)
+        else if (bookmarkService.FindContainingList(viewModel.Bookmarks, target) is { } targetList)
         {
             var targetIndex = targetList.IndexOf(target);
             if (dropPosition == BookmarkBarDropPosition.After)
@@ -1324,11 +1109,10 @@ public partial class MainWindow : Window
         }
         else
         {
-            settings.Bookmarks.Add(source);
+            viewModel.Bookmarks.Add(source);
         }
 
-        settingsService.Save(settings);
-        UpdateBookmarkMenu();
+        viewModel.SaveBookmarks();
     }
 
     /// <summary>
@@ -1343,8 +1127,8 @@ public partial class MainWindow : Window
         BookmarkItem target,
         BookmarkBarDropPosition dropPosition)
     {
-        var sourceList = FindBookmarkList(settings.Bookmarks, source);
-        var targetList = FindBookmarkList(settings.Bookmarks, target);
+        var sourceList = bookmarkService.FindContainingList(viewModel.Bookmarks, source);
+        var targetList = bookmarkService.FindContainingList(viewModel.Bookmarks, target);
         if (sourceList is null ||
             targetList is null ||
             !ReferenceEquals(sourceList, targetList))
@@ -1408,58 +1192,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 指定したブックマークを含む一覧から削除する。
-    /// </summary>
-    /// <param name="items">検索対象の一覧。</param>
-    /// <param name="target">削除するブックマーク。</param>
-    /// <returns>削除できた場合はtrue。</returns>
-    private static bool RemoveBookmark(IList<BookmarkItem> items, BookmarkItem target)
-    {
-        if (items.Remove(target))
-        {
-            return true;
-        }
-
-        return items.Where(item => item.IsFolder).Any(item => RemoveBookmark(item.Children, target));
-    }
-
-    /// <summary>
-    /// 指定したブックマークを直接含む一覧を取得する。
-    /// </summary>
-    /// <param name="items">検索対象の一覧。</param>
-    /// <param name="target">検索するブックマーク。</param>
-    /// <returns>直接含む一覧。見つからない場合はnull。</returns>
-    private static IList<BookmarkItem>? FindBookmarkList(IList<BookmarkItem> items, BookmarkItem target)
-    {
-        if (items.Contains(target))
-        {
-            return items;
-        }
-
-        foreach (var folder in items.Where(item => item.IsFolder))
-        {
-            if (FindBookmarkList(folder.Children, target) is { } childList)
-            {
-                return childList;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// 指定した親フォルダの配下に対象が含まれるか確認する。
-    /// </summary>
-    /// <param name="parent">親として確認するブックマーク。</param>
-    /// <param name="target">検索するブックマーク。</param>
-    /// <returns>配下に含まれる場合はtrue。</returns>
-    private static bool ContainsBookmark(BookmarkItem parent, BookmarkItem target)
-    {
-        return parent.Children.Any(child =>
-            ReferenceEquals(child, target) || ContainsBookmark(child, target));
-    }
-
-    /// <summary>
     /// 固定バーに表示するフォルダまたはページの見出しを作成する。
     /// </summary>
     /// <param name="bookmark">表示するブックマーク。</param>
@@ -1497,8 +1229,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        UrlTextBox.Text = url;
-        NavigateToInputUrl();
+        viewModel.Address = url;
+        viewModel.OpenCommand.Execute(null);
     }
 
     /// <summary>
@@ -1510,16 +1242,6 @@ public partial class MainWindow : Window
         {
             menuItem.IsSubmenuOpen = false;
         }
-    }
-
-    /// <summary>
-    /// 保存済み設定に合わせてブックマークバーの表示状態を更新する。
-    /// </summary>
-    private void UpdateBookmarkBarVisibility()
-    {
-        BookmarkBarSurface.Visibility = settings.IsBookmarkBarPinned
-            ? Visibility.Visible
-            : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1541,15 +1263,14 @@ public partial class MainWindow : Window
     /// <param name="e">クリック時のイベント情報。</param>
     private void OpenBookmarkListMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var bookmarkWindow = new BookmarkWindow(settings.Bookmarks)
+        var bookmarkWindow = new BookmarkWindow(viewModel.Bookmarks)
         {
             Owner = this
         };
         var dialogResult = bookmarkWindow.ShowDialog();
         if (bookmarkWindow.HasChanges)
         {
-            settingsService.Save(settings);
-            UpdateBookmarkMenu();
+            viewModel.SaveBookmarks();
         }
 
         if (dialogResult != true ||
@@ -1558,8 +1279,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        UrlTextBox.Text = url;
-        NavigateToInputUrl();
+        viewModel.Address = url;
+        viewModel.OpenCommand.Execute(null);
     }
 
     /// <summary>
@@ -1602,7 +1323,7 @@ public partial class MainWindow : Window
     /// <param name="e">クリック時のイベント情報。</param>
     private void ClearBookmarksMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (settings.Bookmarks.Count == 0)
+        if (viewModel.Bookmarks.Count == 0)
         {
             return;
         }
@@ -1617,9 +1338,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        settings.Bookmarks.Clear();
-        settingsService.Save(settings);
-        UpdateBookmarkMenu();
+        viewModel.Bookmarks.Clear();
+        viewModel.SaveBookmarks();
     }
 
     /// <summary>
@@ -1629,7 +1349,7 @@ public partial class MainWindow : Window
     /// <param name="sourceName">読み込み元として表示する名称。</param>
     private void MergeImportedBookmarks(IEnumerable<BookmarkItem> importedBookmarks, string sourceName)
     {
-        if (settings.Bookmarks.Count > 0)
+        if (viewModel.Bookmarks.Count > 0)
         {
             var result = MessageBox.Show(
                 "既存のブックマークをどうしますか？\n\nはい: 既存の内容を置き換える（ツリー表示にしたい場合はこちら）\nいいえ: 既存の内容へ追加する",
@@ -1643,118 +1363,17 @@ public partial class MainWindow : Window
 
             if (result == MessageBoxResult.Yes)
             {
-                settings.Bookmarks = importedBookmarks.Select(CloneBookmark).ToList();
-                settingsService.Save(settings);
-                UpdateBookmarkMenu();
-                MessageBox.Show($"{sourceName}の {CountBookmarkUrls(settings.Bookmarks)} 件のブックマークへ置き換えました。", "インポート完了", MessageBoxButton.OK, MessageBoxImage.Information);
+                viewModel.ReplaceBookmarks(importedBookmarks.Select(bookmarkService.Clone));
+                MessageBox.Show($"{sourceName}の {bookmarkService.CountUrls(viewModel.Bookmarks)} 件のブックマークへ置き換えました。", "インポート完了", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
         }
 
-        var registeredUrls = new HashSet<string>(GetBookmarkUrls(settings.Bookmarks), StringComparer.OrdinalIgnoreCase);
-        var addedCount = MergeBookmarkItems(importedBookmarks, settings.Bookmarks, registeredUrls);
+        var registeredUrls = new HashSet<string>(bookmarkService.GetUrls(viewModel.Bookmarks), StringComparer.OrdinalIgnoreCase);
+        var addedCount = bookmarkService.Merge(importedBookmarks, viewModel.Bookmarks, registeredUrls);
 
-        settingsService.Save(settings);
-        UpdateBookmarkMenu();
+        viewModel.SaveBookmarks();
         MessageBox.Show($"{sourceName}から {addedCount} 件のブックマークを追加しました。", "インポート完了", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    /// <summary>
-    /// ブックマークを子要素も含めて複製する。
-    /// </summary>
-    /// <param name="bookmark">複製元のブックマーク。</param>
-    /// <returns>複製したブックマーク。</returns>
-    private static BookmarkItem CloneBookmark(BookmarkItem bookmark)
-    {
-        return new BookmarkItem
-        {
-            Name = bookmark.Name,
-            Url = bookmark.Url,
-            IsFolder = bookmark.IsFolder,
-            Children = bookmark.Children.Select(CloneBookmark).ToList()
-        };
-    }
-
-    /// <summary>
-    /// 階層内のURLブックマーク件数を数える。
-    /// </summary>
-    /// <param name="bookmarks">集計対象のブックマーク一覧。</param>
-    /// <returns>URLブックマークの件数。</returns>
-    private static int CountBookmarkUrls(IEnumerable<BookmarkItem> bookmarks)
-    {
-        return bookmarks.Sum(bookmark => bookmark.IsFolder ? CountBookmarkUrls(bookmark.Children) : 1);
-    }
-
-    /// <summary>
-    /// 読み込んだブックマークを保存済みの同名フォルダへ結合する。
-    /// </summary>
-    /// <param name="importedBookmarks">読み込んだブックマーク一覧。</param>
-    /// <param name="destination">追加先のブックマーク一覧。</param>
-    /// <param name="registeredUrls">重複を判定するURL一覧。</param>
-    /// <returns>追加したURLの件数。</returns>
-    private static int MergeBookmarkItems(
-        IEnumerable<BookmarkItem> importedBookmarks,
-        ICollection<BookmarkItem> destination,
-        ISet<string> registeredUrls)
-    {
-        var addedCount = 0;
-        foreach (var bookmark in importedBookmarks)
-        {
-            if (bookmark.IsFolder)
-            {
-                var folderName = string.IsNullOrWhiteSpace(bookmark.Name) ? "フォルダ" : bookmark.Name;
-                var destinationFolder = destination.FirstOrDefault(item =>
-                    item.IsFolder && string.Equals(item.Name, folderName, StringComparison.CurrentCultureIgnoreCase));
-                if (destinationFolder is null)
-                {
-                    destinationFolder = new BookmarkItem { Name = folderName, IsFolder = true };
-                    destination.Add(destinationFolder);
-                }
-
-                addedCount += MergeBookmarkItems(bookmark.Children, destinationFolder.Children, registeredUrls);
-                continue;
-            }
-
-            if (!UrlHelper.TryCreateUrl(bookmark.Url, out var normalizedUrl) || !registeredUrls.Add(normalizedUrl))
-            {
-                continue;
-            }
-
-            destination.Add(new BookmarkItem
-            {
-                Name = string.IsNullOrWhiteSpace(bookmark.Name) ? normalizedUrl : bookmark.Name,
-                Url = normalizedUrl
-            });
-            addedCount++;
-        }
-
-        return addedCount;
-    }
-
-    /// <summary>
-    /// 階層内に登録済みのURLを列挙する。
-    /// </summary>
-    /// <param name="bookmarks">検索対象のブックマーク一覧。</param>
-    /// <returns>登録済みURL。</returns>
-    private static IEnumerable<string> GetBookmarkUrls(IEnumerable<BookmarkItem> bookmarks)
-    {
-        foreach (var bookmark in bookmarks)
-        {
-            if (bookmark.IsFolder)
-            {
-                foreach (var childUrl in GetBookmarkUrls(bookmark.Children))
-                {
-                    yield return childUrl;
-                }
-
-                continue;
-            }
-
-            if (UrlHelper.TryCreateUrl(bookmark.Url, out var normalizedUrl))
-            {
-                yield return normalizedUrl;
-            }
-        }
     }
 
     /// <summary>
@@ -1775,7 +1394,7 @@ public partial class MainWindow : Window
         {
             if (ReferenceEquals(ActiveBrowserTab?.Browser, browser))
             {
-                UrlTextBox.Text = address;
+                viewModel.UpdateAddress(address);
             }
         });
     }
@@ -1844,7 +1463,7 @@ public partial class MainWindow : Window
         var browser = new ChromiumWebBrowser
         {
             Background = System.Windows.Media.Brushes.Transparent,
-            Opacity = OpacitySlider.Value
+            Opacity = viewModel.BrowserOpacity
         };
         browser.AddressChanged += BrowserView_AddressChanged;
         browser.LoadingStateChanged += BrowserView_LoadingStateChanged;
@@ -1854,10 +1473,14 @@ public partial class MainWindow : Window
         {
             // Chromiumの描画が失敗しても透明なウィンドウ越しに背後を操作させない。
             Background = (System.Windows.Media.Brush)FindResource("WindowBackgroundBrush"),
-            Opacity = OpacitySlider.Value
+            Opacity = viewModel.BrowserOpacity
         };
         var loadingOverlay = CreateLoadingOverlay();
         var translationOverlay = CreateTranslationOverlay();
+        BindBrowserOpacity(browser);
+        BindBrowserOpacity(pageBackground);
+        BindBrowserOpacity(loadingOverlay);
+        BindBrowserOpacity(translationOverlay);
         var browserGrid = new Grid();
         browserGrid.Children.Add(pageBackground);
         browserGrid.Children.Add(browser);
@@ -1870,9 +1493,21 @@ public partial class MainWindow : Window
         BrowserTabControl.Items.Add(tabItem);
         BrowserTabControl.SelectedItem = tabItem;
 
-        UrlTextBox.Text = url;
+        viewModel.Address = url;
         browser.Address = url;
         _ = ShowInitialLoadingOverlayAsync(browserTab);
+    }
+
+    /// <summary>
+    /// 動的に生成したブラウザ部品へViewModelの不透明度を反映する。
+    /// </summary>
+    /// <param name="element">不透明度を設定する画面部品。</param>
+    private static void BindBrowserOpacity(UIElement element)
+    {
+        BindingOperations.SetBinding(
+            element,
+            UIElement.OpacityProperty,
+            new System.Windows.Data.Binding(nameof(MainWindowViewModel.BrowserOpacity)));
     }
 
     /// <summary>
@@ -1929,7 +1564,7 @@ public partial class MainWindow : Window
         {
             Background = System.Windows.Media.Brushes.Transparent,
             IsHitTestVisible = false,
-            Opacity = OpacitySlider.Value,
+            Opacity = viewModel.BrowserOpacity,
             Visibility = Visibility.Collapsed,
             Child = loadingCard
         };
@@ -1981,7 +1616,7 @@ public partial class MainWindow : Window
         {
             Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(104, 0, 0, 0)),
             Visibility = Visibility.Collapsed,
-            Opacity = OpacitySlider.Value,
+            Opacity = viewModel.BrowserOpacity,
             Child = card
         };
     }
@@ -2003,304 +1638,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// CefSharpの右クリックメニューからページ翻訳を開始する。
-    /// </summary>
-    /// <param name="sender">翻訳メニューを通知した処理。</param>
-    /// <param name="browser">翻訳対象のブラウザ。</param>
-    private void BrowserContextMenuHandler_PageTranslationRequested(object? sender, IWebBrowser browser)
-    {
-        if (browser is not ChromiumWebBrowser chromiumWebBrowser)
-        {
-            return;
-        }
-
-        Dispatcher.InvokeAsync(() => TranslatePageInBrowser(chromiumWebBrowser));
-    }
-
-    /// <summary>
-    /// Google翻訳を使い、表示中のタブをページ翻訳表示へ切り替える。
-    /// </summary>
-    /// <param name="browser">翻訳対象のブラウザ。</param>
-    private void TranslatePageInBrowser(ChromiumWebBrowser browser)
-    {
-        if (!UrlHelper.TryCreateUrl(browser.Address, out var pageUrl))
-        {
-            ShowTranslationMessage(FindBrowserTab(browser), "このページは翻訳できません。", MessageBoxImage.Information);
-            return;
-        }
-
-        var targetLanguage = translationTargetCulture.TwoLetterISOLanguageName;
-        var translatedUrl = $"https://translate.google.com/translate?sl=auto&tl={Uri.EscapeDataString(targetLanguage)}&u={Uri.EscapeDataString(pageUrl)}";
-        browser.Address = translatedUrl;
-    }
-
-    /// <summary>
-    /// CefSharpの右クリックメニューからGemini翻訳を開始する。
-    /// </summary>
-    /// <param name="sender">翻訳メニューを通知した処理。</param>
-    /// <param name="browser">翻訳対象のブラウザ。</param>
-    private void BrowserContextMenuHandler_GeminiPageTranslationRequested(object? sender, IWebBrowser browser)
-    {
-        if (browser is not ChromiumWebBrowser chromiumWebBrowser)
-        {
-            return;
-        }
-
-        Dispatcher.InvokeAsync(() => _ = TranslatePageWithGeminiAsync(chromiumWebBrowser));
-    }
-
-    /// <summary>
-    /// 表示中ページの文字だけをGeminiで翻訳し、元の位置へ反映する。
-    /// </summary>
-    /// <param name="browser">翻訳対象のブラウザ。</param>
-    /// <returns>翻訳処理の完了を表すタスク。</returns>
-    private async Task TranslatePageWithGeminiAsync(
-        ChromiumWebBrowser browser,
-        string modelName = GeminiTranslationService.DefaultModelName)
-    {
-        var browserTab = FindBrowserTab(browser);
-        try
-        {
-            Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-            if (browserTab is not null)
-            {
-                browserTab.TranslationOverlay.Visibility = Visibility.Visible;
-            }
-
-            var extraction = await browser.EvaluateScriptAsync(CollectPageTextNodesScript);
-            if (!extraction.Success || extraction.Result is not string pageTextJson)
-            {
-                ShowTranslationMessage(browserTab, "このページから翻訳できる文章を取得できませんでした。", MessageBoxImage.Information);
-                return;
-            }
-
-            var segments = JsonSerializer.Deserialize<List<GeminiTranslationService.PageTextSegment>>(
-                pageTextJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (segments is null || segments.Count == 0 || segments.Any(segment => string.IsNullOrWhiteSpace(segment.Text)))
-            {
-                ShowTranslationMessage(browserTab, "このページから翻訳できる文章を取得できませんでした。", MessageBoxImage.Information);
-                return;
-            }
-
-            var result = await geminiTranslationService.TranslateSegmentsAsync(
-                segments,
-                translationTargetCulture,
-                settings.TranslationPersonalization,
-                modelName);
-            if (!result.IsSuccess)
-            {
-                var failureResult = ShowTranslationFailure(browserTab, result.Message, modelName);
-                if (failureResult == GeminiBusyWindowResult.Retry)
-                {
-                    await TranslatePageWithGeminiAsync(browser, modelName);
-                }
-                else if (failureResult == GeminiBusyWindowResult.UseAlternativeModel)
-                {
-                    var alternativeModel = modelName == GeminiTranslationService.DefaultModelName
-                        ? GeminiTranslationService.AlternativeModelName
-                        : GeminiTranslationService.DefaultModelName;
-                    await TranslatePageWithGeminiAsync(browser, alternativeModel);
-                }
-
-                return;
-            }
-
-            var application = await browser.EvaluateScriptAsync(
-                CreateApplyPageTranslationScript(segments, result.Translations));
-            if (!TryGetTranslationApplicationResult(application, out var appliedCount) || appliedCount == 0)
-            {
-                ShowTranslationMessage(browserTab, "翻訳結果をページへ反映できませんでした。ページを再読み込みしてから、もう一度試してください。", MessageBoxImage.Warning);
-            }
-        }
-        catch (JsonException)
-        {
-            ShowTranslationMessage(browserTab, "ページ本文の読み取りに失敗しました。ページを再読み込みしてから、もう一度試してください。", MessageBoxImage.Warning);
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Debug.WriteLine($"Gemini page translation failed: {exception}");
-            ShowTranslationMessage(browserTab, "翻訳処理を完了できませんでした。ページを再読み込みしてから、もう一度試してください。", MessageBoxImage.Warning);
-        }
-        finally
-        {
-            Mouse.OverrideCursor = null;
-            if (browserTab is not null)
-            {
-                browserTab.TranslationOverlay.Visibility = Visibility.Collapsed;
-            }
-        }
-    }
-
-    /// <summary>
-    /// 翻訳中表示を閉じてから、利用者向けのメッセージを表示する。
-    /// </summary>
-    /// <param name="browserTab">翻訳対象のタブ。</param>
-    /// <param name="message">表示するメッセージ。</param>
-    /// <param name="image">メッセージの種別。</param>
-    private void ShowTranslationMessage(BrowserTabState? browserTab, string message, MessageBoxImage image)
-    {
-        if (browserTab is not null)
-        {
-            browserTab.TranslationOverlay.Visibility = Visibility.Collapsed;
-        }
-
-        _ = image;
-        var messageWindow = new TranslationMessageWindow("翻訳", message)
-        {
-            Owner = this
-        };
-        messageWindow.ShowDialog();
-    }
-
-    /// <summary>
-    /// Geminiの失敗内容を表示し、混雑時だけ再試行の選択を受け取る。
-    /// </summary>
-    /// <param name="browserTab">翻訳対象のタブ。</param>
-    /// <param name="message">Gemini APIから返された利用者向けメッセージ。</param>
-    /// <returns>すぐに再試行する場合はtrue。</returns>
-    private GeminiBusyWindowResult ShowTranslationFailure(
-        BrowserTabState? browserTab,
-        string message,
-        string modelName)
-    {
-        if (browserTab is not null)
-        {
-            browserTab.TranslationOverlay.Visibility = Visibility.Collapsed;
-        }
-
-        if (!message.StartsWith("Gemini APIが混雑しています。", StringComparison.Ordinal))
-        {
-            var messageWindow = new TranslationMessageWindow("翻訳", message)
-            {
-                Owner = this
-            };
-            messageWindow.ShowDialog();
-            return GeminiBusyWindowResult.Close;
-        }
-
-        var busyWindow = new GeminiBusyWindow(
-            message,
-            modelName != GeminiTranslationService.AlternativeModelName)
-        {
-            Owner = this
-        };
-        busyWindow.ShowDialog();
-        return busyWindow.Result;
-    }
-
-    /// <summary>
-    /// Geminiの翻訳結果を、抽出時に保持したページ内の文字ノードへ反映するスクリプトを作成する。
-    /// </summary>
-    /// <param name="sourceSegments">翻訳前に取得した文字ノード一覧。</param>
-    /// <param name="translations">ノードIDに対応した翻訳結果。</param>
-    /// <returns>ページへ実行するJavaScript。</returns>
-    private static string CreateApplyPageTranslationScript(
-        IReadOnlyList<GeminiTranslationService.PageTextSegment> sourceSegments,
-        IReadOnlyList<GeminiTranslationService.PageTextSegment> translations)
-    {
-        var sourceTextById = sourceSegments.ToDictionary(segment => segment.Id, segment => segment.Text);
-        var replacements = translations
-            .Where(translation => sourceTextById.ContainsKey(translation.Id))
-            .Select(translation => new PageTextReplacement(
-                translation.Id,
-                sourceTextById[translation.Id],
-                translation.Text))
-            .ToList();
-        var replacementJson = JsonSerializer.Serialize(
-            replacements,
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        return $$"""
-            (() => {
-                const textNodes = window.__overlayBrowserTextNodes;
-                const replacements = {{replacementJson}};
-                const excludedTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION', 'CODE', 'PRE', 'SVG']);
-                const usedNodes = new Set();
-
-                const findCurrentTextNode = (sourceText) => {
-                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-                        acceptNode(node) {
-                            const parent = node.parentElement;
-                            if (!parent || excludedTags.has(parent.tagName) || parent.isContentEditable || usedNodes.has(node)) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-
-                            return node.nodeValue === sourceText
-                                ? NodeFilter.FILTER_ACCEPT
-                                : NodeFilter.FILTER_REJECT;
-                        }
-                    });
-                    return walker.nextNode();
-                };
-
-                let updatedCount = 0;
-                for (const replacement of replacements) {
-                    let node = Array.isArray(textNodes) ? textNodes[replacement.id] : null;
-                    if (!node || !node.parentElement || node.nodeValue !== replacement.sourceText || usedNodes.has(node)) {
-                        node = findCurrentTextNode(replacement.sourceText);
-                    }
-
-                    if (node && typeof replacement.translatedText === 'string') {
-                        node.nodeValue = replacement.translatedText;
-                        usedNodes.add(node);
-                        updatedCount++;
-                    }
-                }
-
-                return JSON.stringify({ updatedCount, requestedCount: replacements.length });
-            })();
-            """;
-    }
-
-    /// <summary>
-    /// JavaScriptが返したページ反映件数を読み取る。
-    /// </summary>
-    /// <param name="application">ページ反映スクリプトの実行結果。</param>
-    /// <param name="appliedCount">反映できた文字ノード数。</param>
-    /// <returns>実行結果を読み取れた場合はtrue。</returns>
-    private static bool TryGetTranslationApplicationResult(JavascriptResponse application, out int appliedCount)
-    {
-        appliedCount = 0;
-        if (!application.Success || application.Result is not string resultJson)
-        {
-            return false;
-        }
-
-        try
-        {
-            var result = JsonSerializer.Deserialize<TranslationApplicationResult>(
-                resultJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (result is null || result.RequestedCount == 0)
-            {
-                return false;
-            }
-
-            appliedCount = result.UpdatedCount;
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 元の文字列と翻訳後の文字列を対応付ける。
-    /// </summary>
-    /// <param name="Id">抽出時の文字ノードID。</param>
-    /// <param name="SourceText">翻訳前の文字列。</param>
-    /// <param name="TranslatedText">Geminiが返した翻訳後の文字列。</param>
-    private sealed record PageTextReplacement(int Id, string SourceText, string TranslatedText);
-
-    /// <summary>
-    /// ページ反映スクリプトの結果を表す。
-    /// </summary>
-    /// <param name="UpdatedCount">翻訳を反映した文字ノード数。</param>
-    /// <param name="RequestedCount">反映を依頼した文字ノード数。</param>
-    private sealed record TranslationApplicationResult(int UpdatedCount, int RequestedCount);
-
-    /// <summary>
     /// タブを切り替えた時にURL欄と履歴操作を更新する。
     /// </summary>
     /// <param name="sender">イベントの発生元。</param>
@@ -2312,7 +1649,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        UrlTextBox.Text = browserTab.Browser.Address;
+        viewModel.UpdateAddress(browserTab.Browser.Address);
         UpdateNavigationButtons(browserTab.Browser.CanGoBack, browserTab.Browser.CanGoForward);
     }
 
@@ -2344,8 +1681,8 @@ public partial class MainWindow : Window
 
         if (browserTabs.Count == 1)
         {
-            UrlTextBox.Text = GetNewTabUrl();
-            NavigateToInputUrl();
+            viewModel.Address = GetNewTabUrl();
+            viewModel.OpenCommand.Execute(null);
             return;
         }
 
@@ -2388,8 +1725,7 @@ public partial class MainWindow : Window
     /// <param name="canGoForward">次のページへ進めるかどうか。</param>
     private void UpdateNavigationButtons(bool canGoBack, bool canGoForward)
     {
-        BackButton.IsEnabled = canGoBack;
-        ForwardButton.IsEnabled = canGoForward;
+        viewModel.UpdateNavigationState(canGoBack, canGoForward);
         BackButtonIcon.Fill = canGoBack
             ? (System.Windows.Media.Brush)FindResource("AccentSecondaryBrush")
             : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(122, 115, 107));
@@ -2412,10 +1748,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        settings.LastUrl = UrlTextBox.Text;
-        settings.IsTopmost = Topmost;
-        settings.Opacity = OpacitySlider.Value;
-        settingsService.Save(settings);
+        viewModel.SaveBeforeExit();
         trayIconService.Dispose();
         foreach (var browserTab in browserTabs.Values.ToList())
         {

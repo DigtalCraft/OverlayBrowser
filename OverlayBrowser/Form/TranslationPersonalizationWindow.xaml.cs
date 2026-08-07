@@ -1,5 +1,5 @@
 using System.Windows;
-using OverlayBrowser.Service;
+using OverlayBrowser.ViewModel;
 
 namespace OverlayBrowser.Form;
 
@@ -8,10 +8,12 @@ namespace OverlayBrowser.Form;
 /// </summary>
 public partial class TranslationPersonalizationWindow : Window
 {
+    private readonly TranslationPersonalizationWindowViewModel viewModel;
+
     /// <summary>
     /// 保存する翻訳時の指示を取得する。
     /// </summary>
-    public string Personalization { get; private set; } = string.Empty;
+    public string Personalization => viewModel.Personalization;
 
     /// <summary>
     /// 翻訳カスタマイズ画面を初期化する。
@@ -20,39 +22,18 @@ public partial class TranslationPersonalizationWindow : Window
     public TranslationPersonalizationWindow(string personalization)
     {
         InitializeComponent();
-        PersonalizationTextBox.Text = string.IsNullOrWhiteSpace(personalization)
-            ? GeminiTranslationService.DefaultTranslationPersonalization
-            : personalization;
+        viewModel = new TranslationPersonalizationWindowViewModel(personalization);
+        viewModel.CloseRequested += ViewModel_CloseRequested;
+        DataContext = viewModel;
     }
 
     /// <summary>
-    /// 標準の翻訳方針を入力欄へ戻す。
+    /// ViewModelが確定した結果で画面を閉じる。
     /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void RestoreDefaultButton_Click(object sender, RoutedEventArgs e)
+    /// <param name="sender">翻訳カスタマイズ画面ViewModel。</param>
+    /// <param name="e">呼び出し元へ返す結果。</param>
+    private void ViewModel_CloseRequested(object? sender, DialogCloseRequestedEventArgs e)
     {
-        PersonalizationTextBox.Text = GeminiTranslationService.DefaultTranslationPersonalization;
-    }
-
-    /// <summary>
-    /// 入力された翻訳方針をメイン画面へ返す。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
-    {
-        Personalization = PersonalizationTextBox.Text.Trim();
-        DialogResult = true;
-    }
-
-    /// <summary>
-    /// 変更を保存せず画面を閉じる。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">クリック時のイベント情報。</param>
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        DialogResult = false;
+        DialogResult = e.DialogResult;
     }
 }

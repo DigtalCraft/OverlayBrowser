@@ -15,6 +15,7 @@
         ResizeMode="CanResize"
         Background="Transparent"
         AllowsTransparency="True"
+        Topmost="{Binding IsTopmost}"
         Foreground="{StaticResource MainTextBrush}"
         FontFamily="Yu Gothic UI"
         Closing="Window_Closing">
@@ -308,7 +309,7 @@
             </Grid.RowDefinitions>
 
             <!-- アプリ名とウィンドウ操作を一体化したカスタムタイトルバー。 -->
-            <Border x:Name="TitleBarSurface" Grid.Row="0" Background="#0B1324" BorderBrush="#233557" BorderThickness="0,0,0,1">
+            <Border x:Name="TitleBarSurface" Grid.Row="0" Background="#0B1324" BorderBrush="#233557" BorderThickness="0,0,0,1" Opacity="{Binding BrowserOpacity}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -329,40 +330,40 @@
             </Border>
 
             <!-- ブラウザ操作とオーバーレイ表示をまとめたメニューバー。 -->
-            <Menu x:Name="MenuBarSurface" Grid.Row="1" BorderBrush="#334F70" BorderThickness="0,0,0,1">
+            <Menu x:Name="MenuBarSurface" Grid.Row="1" BorderBrush="#334F70" BorderThickness="0,0,0,1" Opacity="{Binding BrowserOpacity}">
                 <MenuItem Header="ブラウザ">
-                    <MenuItem Header="新しいタブ" Click="NewTabMenuItem_Click" />
-                    <MenuItem Header="ホームを開く" Click="OpenHomeMenuItem_Click" />
+                    <MenuItem Header="新しいタブ" Command="{Binding NewTabCommand}" />
+                    <MenuItem Header="ホームを開く" Command="{Binding OpenHomeCommand}" />
                     <Separator />
-                    <MenuItem Header="再読み込み" Click="ReloadMenuItem_Click" />
+                    <MenuItem Header="再読み込み" Command="{Binding ReloadCommand}" />
                 </MenuItem>
                 <MenuItem Header="ブックマーク" x:Name="BookmarkMenuItem" SubmenuOpened="BookmarkMenuItem_SubmenuOpened">
                     <MenuItem Header="ブックマークがありません" IsEnabled="False" />
                 </MenuItem>
                 <MenuItem Header="ブックマーク詳細">
-                    <MenuItem Header="Chromeからインポート" Click="ImportChromeMenuItem_Click" />
-                    <MenuItem Header="Edgeからインポート" Click="ImportEdgeMenuItem_Click" />
-                    <MenuItem Header="HTMLファイルからインポート" Click="ImportHtmlMenuItem_Click" />
+                    <MenuItem Header="Chromeからインポート" Command="{Binding ImportChromeBookmarksCommand}" />
+                    <MenuItem Header="Edgeからインポート" Command="{Binding ImportEdgeBookmarksCommand}" />
+                    <MenuItem Header="HTMLファイルからインポート" Command="{Binding ImportHtmlBookmarksCommand}" />
                     <Separator />
-                    <MenuItem Header="Chrome / Edge 用HTMLへエクスポート" Click="ExportHtmlMenuItem_Click" />
-                    <MenuItem Header="保存済みブックマークをすべて削除" Click="ClearBookmarksMenuItem_Click" />
+                    <MenuItem Header="Chrome / Edge 用HTMLへエクスポート" Command="{Binding ExportBookmarksCommand}" />
+                    <MenuItem Header="保存済みブックマークをすべて削除" Command="{Binding ClearBookmarksCommand}" />
                 </MenuItem>
                 <MenuItem Header="設定">
-                    <MenuItem Header="常に前面に表示" x:Name="TopmostMenuItem" IsCheckable="True" Click="TopmostMenuItem_Click" />
-                    <MenuItem Header="Windowsの起動時にタスクトレイへ常駐" x:Name="StartWithWindowsMenuItem" IsCheckable="True" Click="StartWithWindowsMenuItem_Click" />
-                    <MenuItem Header="ブックマークバーを固定表示" x:Name="BookmarkBarMenuItem" IsCheckable="True" Click="BookmarkBarMenuItem_Click" />
+                    <MenuItem Header="常に前面に表示" IsCheckable="True" IsChecked="{Binding IsTopmost, Mode=TwoWay}" />
+                    <MenuItem Header="Windowsの起動時にタスクトレイへ常駐" IsCheckable="True" IsChecked="{Binding IsStartWithWindows, Mode=TwoWay}" />
+                    <MenuItem Header="ブックマークバーを固定表示" IsCheckable="True" IsChecked="{Binding IsBookmarkBarPinned, Mode=TwoWay}" />
                     <Separator />
-                    <MenuItem Header="履歴の削除" Click="ClearHistoryMenuItem_Click" />
-                    <MenuItem Header="Cookieの削除" Click="ClearCookiesMenuItem_Click" />
+                    <MenuItem Header="履歴の削除" Command="{Binding ClearHistoryCommand}" />
+                    <MenuItem Header="Cookieの削除" Command="{Binding ClearCookiesCommand}" />
                     <Separator />
-                    <MenuItem Header="Gemini APIキー" Click="GeminiApiKeyMenuItem_Click" />
-                    <MenuItem Header="翻訳のカスタマイズ" Click="TranslationPersonalizationMenuItem_Click" />
+                    <MenuItem Header="Gemini APIキー" Command="{Binding ShowGeminiApiKeyCommand}" />
+                    <MenuItem Header="翻訳のカスタマイズ" Command="{Binding ShowTranslationPersonalizationCommand}" />
                 </MenuItem>
                 <MenuItem Header="ヘルプ">
-                    <MenuItem Header="使い方 / How to use" Click="HelpMenuItem_Click" />
-                    <MenuItem Header="翻訳のHelp / Translation Help" Click="TranslationHelpMenuItem_Click" />
+                    <MenuItem Header="使い方 / How to use" Command="{Binding ShowHelpCommand}" />
+                    <MenuItem Header="翻訳のHelp / Translation Help" Command="{Binding ShowTranslationHelpCommand}" />
                 </MenuItem>
-                <MenuItem Header="終了" Click="ExitMenuItem_Click" />
+                <MenuItem Header="終了" Command="{Binding ExitCommand}" />
             </Menu>
 
             <!-- 保存済みの階層を保ったまま、よく使うブックマークを横一列へ固定表示する。 -->
@@ -372,7 +373,8 @@
                     Background="#122039"
                     BorderBrush="#2F506D"
                     BorderThickness="0,0,0,1"
-                    Visibility="Collapsed">
+                    Opacity="{Binding BrowserOpacity}"
+                    Visibility="{Binding IsBookmarkBarPinned, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <DockPanel LastChildFill="True">
                     <Button DockPanel.Dock="Left"
                             Width="28"
@@ -385,7 +387,7 @@
                             Background="Transparent"
                             BorderBrush="Transparent"
                             ToolTip="このページをブックマークに追加"
-                            Click="AddBookmarkMenuItem_Click" />
+                            Command="{Binding AddBookmarkCommand}" />
                     <Menu x:Name="BookmarkBarMenu"
                           Padding="0"
                           Background="Transparent" />
@@ -393,7 +395,7 @@
             </Border>
 
             <!-- シアン寄りの縁取りで、ツールバー上の操作を見分けやすくする。 -->
-            <Border x:Name="ToolbarSurface" Grid.Row="3" Background="#1C3551" BorderBrush="#3B5A77" BorderThickness="0,0,0,1" Padding="14,11">
+            <Border x:Name="ToolbarSurface" Grid.Row="3" Background="#1C3551" BorderBrush="#3B5A77" BorderThickness="0,0,0,1" Padding="14,11" Opacity="{Binding BrowserOpacity}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -406,49 +408,56 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,7,0" Click="BackButton_Click" ToolTip="戻る" x:Name="BackButton" IsEnabled="False">
+                    <Button Grid.Column="0" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,7,0" Command="{Binding BackCommand}" ToolTip="戻る" x:Name="BackButton">
                         <Viewbox>
                             <Path x:Name="BackButtonIcon" Fill="#7387A6" Data="M15,4 L6,12 L15,20 L17,18 L10,12 L17,6 Z" />
                         </Viewbox>
                     </Button>
-                    <Button Grid.Column="1" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Click="ForwardButton_Click" ToolTip="進む" x:Name="ForwardButton" IsEnabled="False">
+                    <Button Grid.Column="1" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Command="{Binding ForwardCommand}" ToolTip="進む" x:Name="ForwardButton">
                         <Viewbox>
                             <Path x:Name="ForwardButtonIcon" Fill="#7387A6" Data="M9,4 L18,12 L9,20 L7,18 L14,12 L7,6 Z" />
                         </Viewbox>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Click="HomeButton_Click" ToolTip="ホームを開く">
+                    <Button Grid.Column="2" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Command="{Binding OpenHomeCommand}" ToolTip="ホームを開く">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M4,11 L12,4 L20,11 L18.5,12.8 L17,11.5 L17,20 L7,20 L7,11.5 L5.5,12.8 Z M10,18 L14,18 L14,13 L10,13 Z" />
                         </Viewbox>
                     </Button>
-                    <Button Grid.Column="3" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Click="NewTabButton_Click" ToolTip="新しいタブ">
+                    <Button Grid.Column="3" Style="{StaticResource BrowserActionButtonStyle}" Margin="0,0,9,0" Command="{Binding NewTabCommand}" ToolTip="新しいタブ">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M11,5 L13,5 L13,11 L19,11 L19,13 L13,13 L13,19 L11,19 L11,13 L5,13 L5,11 L11,11 Z" />
                         </Viewbox>
                     </Button>
-                    <TextBox Grid.Column="4" x:Name="UrlTextBox" VerticalContentAlignment="Center" KeyDown="UrlTextBox_KeyDown" />
+                    <TextBox Grid.Column="4"
+                             x:Name="UrlTextBox"
+                             Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}"
+                             VerticalContentAlignment="Center">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding OpenCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
                     <Button Grid.Column="5"
                             Style="{StaticResource BrowserActionButtonStyle}"
                             Margin="9,0,0,0"
-                            Click="AddBookmarkMenuItem_Click"
+                            Command="{Binding AddBookmarkCommand}"
                             ToolTip="このページをブックマークに追加"
                             Content="★"
                             FontSize="21"
                             Foreground="{StaticResource AccentSecondaryBrush}" />
-                    <Button Grid.Column="6" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Click="OpenButton_Click" ToolTip="開く">
+                    <Button Grid.Column="6" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Command="{Binding OpenCommand}" ToolTip="開く">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M12,4 L20,4 L20,12 L17.5,12 L17.5,8.3 L9.8,16 L8,14.2 L15.7,6.5 L12,6.5 Z M5,6 L10,6 L10,8.5 L7.5,8.5 L7.5,16.5 L15.5,16.5 L15.5,14 L18,14 L18,19 L5,19 Z" />
                         </Viewbox>
                     </Button>
-                    <Button Grid.Column="7" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Click="ReloadButton_Click" ToolTip="再読み込み">
+                    <Button Grid.Column="7" Style="{StaticResource BrowserActionButtonStyle}" Margin="8,0,0,0" Command="{Binding ReloadCommand}" ToolTip="再読み込み">
                         <Viewbox>
                             <Path Fill="{StaticResource AccentSecondaryBrush}" Data="M12,4 A8,8 0 1 0 19.5,14 L17,14 A5.5,5.5 0 1 1 16.7,7.2 L14,10 L20,10 L20,4 L18.4,5.6 A8,8 0 0 0 12,4 Z" />
                         </Viewbox>
                     </Button>
                     <StackPanel Grid.Column="8" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="透明度" Foreground="{StaticResource SubTextBrush}" VerticalAlignment="Center" Margin="0,0,9,0" />
-                        <Slider x:Name="OpacitySlider" Width="115" Minimum="0.35" Maximum="1" Value="1" TickFrequency="0.05" ValueChanged="OpacitySlider_ValueChanged" />
-                        <TextBlock x:Name="OpacityTextBlock" Width="42" Text="100%" Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" Margin="9,0,0,0" />
+                        <Slider x:Name="OpacitySlider" Width="115" Minimum="0.35" Maximum="1" Value="{Binding BrowserOpacity, Mode=TwoWay}" TickFrequency="0.05" />
+                        <TextBlock x:Name="OpacityTextBlock" Width="42" Text="{Binding OpacityText}" Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" Margin="9,0,0,0" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -456,7 +465,7 @@
             <!-- タブごとにCefSharpのブラウザを保持し、Webページにも透明度を反映する。 -->
             <Grid Grid.Row="4">
                 <!-- タブ見出しの余白も透明な穴にせず、常にテーマ色で受け止める。 -->
-                <Border x:Name="BrowserWorkspaceBackground" Background="{StaticResource WindowBackgroundBrush}" />
+                <Border x:Name="BrowserWorkspaceBackground" Background="{StaticResource WindowBackgroundBrush}" Opacity="{Binding BrowserOpacity}" />
                 <TabControl x:Name="BrowserTabControl" SelectionChanged="BrowserTabControl_SelectionChanged" />
                 <!-- 右下へカーソルを合わせる位置を示すリサイズ用の目印。 -->
                 <Path Width="22"
