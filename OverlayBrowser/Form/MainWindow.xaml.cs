@@ -1519,6 +1519,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Webページをクリックした時にCefSharpへキーボード入力先を戻す。
+    /// </summary>
+    /// <param name="sender">クリックされたブラウザ。</param>
+    /// <param name="e">マウス操作の情報。</param>
+    private void BrowserView_PreviewMouseLeftButtonDown(object sender, WpfMouseButtonEventArgs e)
+    {
+        if (sender is ChromiumWebBrowser browser)
+        {
+            RestoreBrowserFocus(browser);
+        }
+    }
+
+    /// <summary>
+    /// WPFとChromiumの両方へキーボード入力のフォーカスを設定する。
+    /// </summary>
+    /// <param name="browser">入力先へ戻すブラウザ。</param>
+    private static void RestoreBrowserFocus(ChromiumWebBrowser browser)
+    {
+        browser.Focus();
+        if (browser.IsBrowserInitialized)
+        {
+            browser.GetBrowserHost()?.SendFocusEvent(true);
+        }
+    }
+
+    /// <summary>
     /// 新しいブラウザタブと、そのタブ専用のCefSharpブラウザを追加する。
     /// </summary>
     /// <param name="url">新しいタブで最初に表示するURL。</param>
@@ -1552,6 +1578,7 @@ public partial class MainWindow : Window
         };
         browser.AddressChanged += BrowserView_AddressChanged;
         browser.LoadingStateChanged += BrowserView_LoadingStateChanged;
+        browser.PreviewMouseLeftButtonDown += BrowserView_PreviewMouseLeftButtonDown;
         browser.LifeSpanHandler = browserPopupLifeSpanHandler;
         browser.MenuHandler = browserContextMenuHandler;
 
@@ -1737,6 +1764,9 @@ public partial class MainWindow : Window
 
         viewModel.UpdateAddress(browserTab.Browser.Address);
         UpdateNavigationButtons(browserTab.Browser.CanGoBack, browserTab.Browser.CanGoForward);
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            () => RestoreBrowserFocus(browserTab.Browser));
     }
 
     /// <summary>
