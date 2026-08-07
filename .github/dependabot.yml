@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  # NuGetの新しいバージョンを毎週確認し、更新用のPull Requestを作成する。
+  - package-ecosystem: "nuget"
+    directory: "/OverlayBrowser"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # 互換性を確認しやすいマイナー・パッチ更新を1件へまとめる。
+      nuget-minor-and-patch:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ビルド確認で使用するGitHub Actions自体も月1回更新確認する。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"

@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  # 通常変更とDependabotの更新案を同じ条件で検証する。
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  release-build:
+    name: Release build
+    runs-on: windows-latest
+
+    steps:
+      # リポジトリのソースをWindowsビルド環境へ取得する。
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # プロジェクトが対象とする.NET 10 SDKを準備する。
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      # NuGet依存関係を復元してからRelease構成を検証する。
+      - name: Restore NuGet packages
+        run: dotnet restore OverlayBrowser/OverlayBrowser.csproj
+
+      - name: Build application
+        run: dotnet build OverlayBrowser/OverlayBrowser.csproj --configuration Release --no-restore
