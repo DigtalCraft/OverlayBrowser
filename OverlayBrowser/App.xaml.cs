@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Interop;
 using CefSharp;
 using CefSharp.Wpf;
+using OverlayBrowser.Service;
 
 namespace OverlayBrowser;
 
@@ -15,6 +16,7 @@ public partial class App : System.Windows.Application
 {
     private const string ClearBrowserDataArgumentPrefix = "--clear-browser-data=";
     private const string WaitForParentArgumentPrefix = "--wait-for-parent=";
+    private const int WindowsStartupDelaySeconds = 15;
     private const int DwmUseImmersiveDarkMode = 20;
     private const int DwmBorderColor = 34;
     private const int DwmCaptionColor = 35;
@@ -39,9 +41,24 @@ public partial class App : System.Windows.Application
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(Window_Loaded));
 
-        var applicationDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OverlayBrowser");
+        var applicationDirectory = GetApplicationDirectory();
+        var startedFromWindows = Environment.GetCommandLineArgs().Any(argument =>
+            string.Equals(
+                argument,
+                WindowsStartupService.StartupArgument,
+                StringComparison.OrdinalIgnoreCase));
+        WriteStartupLog(
+            applicationDirectory,
+            startedFromWindows ? "Windows自動起動を開始" : "通常起動を開始");
+
+        if (startedFromWindows)
+        {
+            WriteStartupLog(
+                applicationDirectory,
+                $"Chromium初期化を{WindowsStartupDelaySeconds}秒待機");
+            Thread.Sleep(TimeSpan.FromSeconds(WindowsStartupDelaySeconds));
+        }
+
         var cefSettings = new CefSettings
         {
             CachePath = Path.Combine(applicationDirectory, "CefSharpCache"),
@@ -52,14 +69,54 @@ public partial class App : System.Windows.Application
             BackgroundColor = Cef.ColorSetARGB(0, 0, 0, 0)
         };
 
+        WriteStartupLog(applicationDirectory, "Chromium初期化を開始");
         if (!Cef.Initialize(cefSettings, performDependencyCheck: true, browserProcessHandler: null))
         {
+            WriteStartupLog(applicationDirectory, "Chromium初期化に失敗");
             MessageBox.Show(
                 "Chromiumブラウザを初期化できませんでした。アプリを再起動してください。",
                 "ブラウザの準備ができません",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+        }
+
+        WriteStartupLog(applicationDirectory, "Chromium初期化が完了");
+    }
+
+    /// <summary>
+    /// アプリ固有データの保存先を取得する。
+    /// </summary>
+    /// <returns>ローカルアプリデータ内の保存先。</returns>
+    private static string GetApplicationDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OverlayBrowser");
+    }
+
+    /// <summary>
+    /// 起動処理の進行状況を診断ログへ記録する。
+    /// </summary>
+    /// <param name="applicationDirectory">アプリ固有データの保存先。</param>
+    /// <param name="message">記録する内容。</param>
+    private static void WriteStartupLog(string applicationDirectory, string message)
+    {
+        try
+        {
+            Directory.CreateDirectory(applicationDirectory);
+            var logPath = Path.Combine(applicationDirectory, "startup.log");
+            var logLine = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} " +
+                          $"[PID:{Environment.ProcessId}] {message}{Environment.NewLine}";
+            File.AppendAllText(logPath, logLine);
+        }
+        catch (IOException)
+        {
+            // 診断ログを書けない場合も、アプリの起動処理は継続する。
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // 診断ログを書けない場合も、アプリの起動処理は継続する。
         }
     }
 
