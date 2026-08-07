@@ -16,11 +16,11 @@ public partial class App : System.Windows.Application
 {
     private const string ClearBrowserDataArgumentPrefix = "--clear-browser-data=";
     private const string WaitForParentArgumentPrefix = "--wait-for-parent=";
-    private const int WindowsStartupDelaySeconds = 15;
     private const int DwmUseImmersiveDarkMode = 20;
     private const int DwmBorderColor = 34;
     private const int DwmCaptionColor = 35;
     private const int DwmTextColor = 36;
+    private readonly string applicationDirectory;
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
@@ -41,7 +41,7 @@ public partial class App : System.Windows.Application
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(Window_Loaded));
 
-        var applicationDirectory = GetApplicationDirectory();
+        applicationDirectory = GetApplicationDirectory();
         var startedFromWindows = Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(
                 argument,
@@ -53,10 +53,25 @@ public partial class App : System.Windows.Application
 
         if (startedFromWindows)
         {
-            WriteStartupLog(
-                applicationDirectory,
-                $"Chromium初期化を{WindowsStartupDelaySeconds}秒待機");
-            Thread.Sleep(TimeSpan.FromSeconds(WindowsStartupDelaySeconds));
+            WriteStartupLog(applicationDirectory, "Chromium初期化を画面表示時まで保留");
+            return;
+        }
+
+        EnsureChromiumInitialized();
+    }
+
+    /// <summary>
+    /// Chromiumが未初期化の場合に初期化する。
+    ///
+    /// Windows自動起動時はタスクトレイを先に表示し、
+    /// メイン画面を表示する時までChromiumの起動を遅らせる。
+    /// </summary>
+    /// <returns>Chromiumを利用できる場合はtrue。</returns>
+    public bool EnsureChromiumInitialized()
+    {
+        if (Cef.IsInitialized == true)
+        {
+            return true;
         }
 
         var cefSettings = new CefSettings
@@ -79,9 +94,11 @@ public partial class App : System.Windows.Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
+            return false;
         }
 
         WriteStartupLog(applicationDirectory, "Chromium初期化が完了");
+        return true;
     }
 
     /// <summary>

@@ -95,6 +95,11 @@ public partial class MainWindow : Window
             !argument.StartsWith("--wait-for-parent=", StringComparison.OrdinalIgnoreCase));
         startHidden = arguments.Any(argument =>
             string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase));
+        if (startHidden)
+        {
+            ShowInTaskbar = false;
+        }
+
         geminiTranslationService = new GeminiTranslationService(geminiApiKeyStore);
         browserContextMenuHandler = new BrowserContextMenuHandler();
         browserContextMenuHandler.PageTranslationRequested += BrowserContextMenuHandler_PageTranslationRequested;
@@ -115,12 +120,13 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateBookmarkMenu();
-        CreateBrowserTab(viewModel.GetStartupAddress(launchTarget));
-
         if (startHidden)
         {
-            Dispatcher.BeginInvoke(HideToNotificationArea);
+            HideToNotificationArea();
+            return;
         }
+
+        CreateInitialBrowserTab();
     }
 
     /// <summary>
@@ -653,6 +659,28 @@ public partial class MainWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+        CreateInitialBrowserTab();
+    }
+
+    /// <summary>
+    /// 初回表示に必要なブラウザタブを作成する。
+    ///
+    /// Windows自動起動時はCEFのブラウザ生成を遅らせ、
+    /// タスクトレイから画面を表示した時に初めて作成する。
+    /// </summary>
+    private void CreateInitialBrowserTab()
+    {
+        if (browserTabs.Count > 0)
+        {
+            return;
+        }
+
+        if (System.Windows.Application.Current is App app && !app.EnsureChromiumInitialized())
+        {
+            return;
+        }
+
+        CreateBrowserTab(viewModel.GetStartupAddress(launchTarget));
     }
 
     /// <summary>
