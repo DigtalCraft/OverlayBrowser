@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<TabItem, BrowserTabState> browserTabs = [];
     private readonly string? launchTarget;
     private readonly bool startHidden;
+    private bool isInitialLoadCompleted;
     private bool isExitConfirmed;
     private WpfPoint bookmarkBarDragStartPoint;
     private BookmarkItem? draggedBookmarkBarItem;
@@ -119,6 +120,13 @@ public partial class MainWindow : Window
     /// <param name="e">画面表示時のイベント情報。</param>
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (isInitialLoadCompleted)
+        {
+            return;
+        }
+
+        // 非表示からの復元時に初回起動処理を繰り返さない。
+        isInitialLoadCompleted = true;
         UpdateBookmarkMenu();
         if (startHidden)
         {
@@ -625,7 +633,7 @@ public partial class MainWindow : Window
     /// <param name="e">トレイ操作のイベント情報。</param>
     private void TrayIconService_ShowRequested(object? sender, EventArgs e)
     {
-        ShowWindowFromTray();
+        Dispatcher.BeginInvoke(ShowWindowFromTray);
     }
 
     /// <summary>
@@ -635,8 +643,11 @@ public partial class MainWindow : Window
     /// <param name="e">トレイ操作のイベント情報。</param>
     private void TrayIconService_HelpRequested(object? sender, EventArgs e)
     {
-        ShowWindowFromTray();
-        OpenHelpWindow();
+        Dispatcher.BeginInvoke(() =>
+        {
+            ShowWindowFromTray();
+            OpenHelpWindow();
+        });
     }
 
     /// <summary>
@@ -646,8 +657,11 @@ public partial class MainWindow : Window
     /// <param name="e">トレイ操作のイベント情報。</param>
     private void TrayIconService_ExitRequested(object? sender, EventArgs e)
     {
-        ShowWindowFromTray();
-        RequestExit();
+        Dispatcher.BeginInvoke(() =>
+        {
+            ShowWindowFromTray();
+            RequestExit();
+        });
     }
 
     /// <summary>
@@ -656,8 +670,16 @@ public partial class MainWindow : Window
     private void ShowWindowFromTray()
     {
         ShowInTaskbar = true;
-        Show();
-        WindowState = WindowState.Normal;
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
         Activate();
         CreateInitialBrowserTab();
     }
