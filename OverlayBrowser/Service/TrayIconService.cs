@@ -8,17 +8,14 @@ namespace OverlayBrowser.Service;
 /// </summary>
 public sealed class TrayIconService : IDisposable
 {
+    private readonly ContextMenuStrip contextMenu;
+    private readonly Icon trayIcon;
     private readonly NotifyIcon notifyIcon;
 
     /// <summary>
     /// タスクトレイから表示を選択した時に発生する。
     /// </summary>
     public event EventHandler? ShowRequested;
-
-    /// <summary>
-    /// タスクトレイからヘルプを選択した時に発生する。
-    /// </summary>
-    public event EventHandler? HelpRequested;
 
     /// <summary>
     /// タスクトレイから終了を選択した時に発生する。
@@ -30,15 +27,25 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     public TrayIconService()
     {
-        var contextMenu = new ContextMenuStrip();
-        contextMenu.Items.Add("表示", null, (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty));
-        contextMenu.Items.Add("ヘルプ / Help", null, (_, _) => HelpRequested?.Invoke(this, EventArgs.Empty));
+        trayIcon = CreateApplicationIcon();
+        contextMenu = new ContextMenuStrip
+        {
+            ShowImageMargin = true
+        };
+
+        var openMenuItem = new ToolStripMenuItem("開く", trayIcon.ToBitmap());
+        openMenuItem.Click += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
+
+        var exitMenuItem = new ToolStripMenuItem("終了", SystemIcons.Error.ToBitmap());
+        exitMenuItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+
+        contextMenu.Items.Add(openMenuItem);
         contextMenu.Items.Add(new ToolStripSeparator());
-        contextMenu.Items.Add("終了", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
+        contextMenu.Items.Add(exitMenuItem);
 
         notifyIcon = new NotifyIcon
         {
-            Icon = CreateApplicationIcon(),
+            Icon = trayIcon,
             Text = "Overlay Browser",
             ContextMenuStrip = contextMenu,
             Visible = true
@@ -52,7 +59,10 @@ public sealed class TrayIconService : IDisposable
     public void Dispose()
     {
         notifyIcon.Visible = false;
+        notifyIcon.ContextMenuStrip = null;
         notifyIcon.Dispose();
+        contextMenu.Dispose();
+        trayIcon.Dispose();
     }
 
     /// <summary>
@@ -71,6 +81,6 @@ public sealed class TrayIconService : IDisposable
             }
         }
 
-        return SystemIcons.Application;
+        return (Icon)SystemIcons.Application.Clone();
     }
 }

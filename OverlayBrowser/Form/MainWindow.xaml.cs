@@ -108,7 +108,6 @@ public partial class MainWindow : Window
         browserPopupLifeSpanHandler.PopupOpened += BrowserPopupLifeSpanHandler_PopupOpened;
         browserPopupLifeSpanHandler.PopupClosed += BrowserPopupLifeSpanHandler_PopupClosed;
         trayIconService.ShowRequested += TrayIconService_ShowRequested;
-        trayIconService.HelpRequested += TrayIconService_HelpRequested;
         trayIconService.ExitRequested += TrayIconService_ExitRequested;
         Loaded += MainWindow_Loaded;
     }
@@ -634,20 +633,6 @@ public partial class MainWindow : Window
     private void TrayIconService_ShowRequested(object? sender, EventArgs e)
     {
         Dispatcher.BeginInvoke(ShowWindowFromTray);
-    }
-
-    /// <summary>
-    /// タスクトレイからヘルプを表示する。
-    /// </summary>
-    /// <param name="sender">イベントの発生元。</param>
-    /// <param name="e">トレイ操作のイベント情報。</param>
-    private void TrayIconService_HelpRequested(object? sender, EventArgs e)
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            ShowWindowFromTray();
-            OpenHelpWindow();
-        });
     }
 
     /// <summary>

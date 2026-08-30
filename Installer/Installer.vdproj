@@ -190,15 +190,15 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Overlay Browser"
-        "ProductCode" = "8:{B2AD5C52-35C5-46EC-918C-E6B46C9AA98E}"
-        "PackageCode" = "8:{75540BBC-E9B9-429E-B269-5C862D22B1E3}"
+        "ProductCode" = "8:{07965C6D-59A4-4DFE-BDDF-823B7177C4A2}"
+        "PackageCode" = "8:{546DC1A6-A02C-4825-8818-41DBC0D75FBC}"
         "UpgradeCode" = "8:{F7C8B3D4-F71D-4D14-B342-B3EAEB1DC37A}"
         "AspNetVersion" = "8:2.0.50727.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:TRUE"
         "InstallAllUsers" = "11:FALSE"
-        "ProductVersion" = "8:1.0.6"
+        "ProductVersion" = "8:1.0.7"
         "Manufacturer" = "8:Digtalcraft"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
@@ -219,7 +219,7 @@
         }
         "Registry"
         {
-            "HKLM"
+            "HKCU"
             {
                 "Keys"
                 {
@@ -253,7 +253,7 @@
                     }
                 }
             }
-            "HKCU"
+            "HKLM"
             {
                 "Keys"
                 {

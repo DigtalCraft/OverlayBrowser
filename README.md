@@ -34,6 +34,7 @@ Overlay Browserは、Webページやローカルファイルを、
 - タイトルバー、タブ、メニュー、ダイアログを統一したダークテーマ
 - 閉じるボタンで画面を隠し、タスクトレイへ常駐
 - Windowsへのサインイン時に、画面を開かずタスクトレイで起動可能
+- タスクトレイの右クリックから、アイコン付きの［開く］［終了］を選択
 
 #### ブラウザ機能
 
@@ -85,10 +86,9 @@ Gemini翻訳を利用する場合だけ、利用者自身のGemini APIキーが�
 
 #### 手順
 
-1. このリポジトリのReleasesから`setup.exe`と`Setup.msi`を同じフォルダへダウンロードします。
-   ZIPで配布されている場合は、先にすべて展開します。
+1. このリポジトリのReleasesから`Setup.msi`をダウンロードします。
 2. 起動中のOverlay Browserを終了します。
-3. `setup.exe`を実行します。`Setup.msi`を直接実行することもできます。
+3. `Setup.msi`を実行します。
 4. インストール後、デスクトップまたはスタートメニューのショートカットから起動します。
 
 以前のバージョンがインストールされている場合は、新しいインストーラーから更新できます。
@@ -96,7 +96,7 @@ Gemini翻訳を利用する場合だけ、利用者自身のGemini APIキーが�
 
 ### 証明書なしインストーラーの警告
 
-現在配布している`setup.exe`、`Setup.msi`およびアプリ本体には、
+現在配布している`Setup.msi`およびアプリ本体には、
 発行元をWindowsへ証明するコード署名証明書を付けていません。
 
 そのため、ダウンロード後の初回実行時にMicrosoft Defender SmartScreenが、
@@ -219,6 +219,7 @@ and notification-area operation. The interface uses a consistent translucent dar
 - Consistent dark theme for the title bar, tabs, menus, and dialogs
 - Hide the window in the notification area with the Close button
 - Start in the notification area without opening the main window at Windows sign-in
+- Choose **Open** or **Exit** from the tray icon's right-click menu with icons
 
 #### Browser
 
@@ -268,10 +269,9 @@ The .NET SDK is not required for normal installation.
 
 #### Steps
 
-1. Download both `setup.exe` and `Setup.msi` from this repository's Releases page into the same folder. 
-   If they are provided in a ZIP archive, extract all files first.
+1. Download `Setup.msi` from this repository's Releases page.
 2. Exit any running instance of Overlay Browser.
-3. Run `setup.exe`. You can also run `Setup.msi` directly.
+3. Run `Setup.msi`.
 4. Start Overlay Browser from the desktop or Start menu shortcut.
 
 If an earlier version is already installed, the new installer can update it. 
@@ -279,7 +279,7 @@ Use Windows **Installed apps** or **Programs and Features** to uninstall the app
 
 ### Unsigned installer warning
 
-The currently distributed `setup.exe`, `Setup.msi`, 
+The currently distributed `Setup.msi`,
 and application binaries are **not code-signed** with a certificate that proves the publisher's identity to Windows.
 
 Microsoft Defender SmartScreen may therefore show a warning during the first run after download, including:

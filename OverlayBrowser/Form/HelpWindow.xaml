@@ -30,7 +30,7 @@
                     <LineBreak /><LineBreak />
                     <Run Text="5. ［設定］→［常に前面に表示］でゲームの上に表示します。透明度は上部のスライダーで35〜100%に調整できます。ゲーム側はウィンドウ表示またはボーダーレス表示で使うと安定します。右下の紫色の目印をドラッグすると、ウィンドウサイズを変えられます。" />
                     <LineBreak /><LineBreak />
-                    <Run Text="6. ［設定］→［Windowsの起動時にタスクトレイへ常駐］をオンにすると、次回Windowsへサインインした時は画面を開かずにタスクトレイへ常駐します。トレイのアイコンを右クリックすると［表示］［ヘルプ / Help］［終了］を選べます。" />
+                    <Run Text="6. ［設定］→［Windowsの起動時にタスクトレイへ常駐］をオンにすると、次回Windowsへサインインした時は画面を開かずにタスクトレイへ常駐します。トレイのアイコンを右クリックすると、アイコン付きの［開く］［終了］を選べます。" />
                     <LineBreak /><LineBreak />
                     <Run Text="7. 右上の［×］や Alt + F4 はアプリを終了せず、画面を隠してタスクトレイへ常駐します。完全に終了する時はメニューバーの［終了］またはトレイの［終了］を選び、確認画面で［はい / Yes］を選択します。" />
                     <LineBreak /><LineBreak />
@@ -51,7 +51,7 @@
                     <LineBreak /><LineBreak />
                     <Run Text="5. Select Settings → Always on top to keep the browser above your game. Use the top slider to set opacity from 35% to 100%. Windowed or borderless-window mode is recommended for games. Drag the violet marker at the bottom-right corner to resize the window." />
                     <LineBreak /><LineBreak />
-                    <Run Text="6. Select Settings → Start with Windows and stay in the notification area to start in the Windows notification area at your next sign-in. Right-click the tray icon to choose Show, Help, or Exit." />
+                    <Run Text="6. Select Settings → Start with Windows and stay in the notification area to start in the Windows notification area at your next sign-in. Right-click the tray icon to choose Open or Exit from the icon menu." />
                     <LineBreak /><LineBreak />
                     <Run Text="7. The title-bar close button and Alt + F4 hide the window in the notification area without exiting the app. To exit completely, select Exit from the menu bar or tray menu, then select Yes in the confirmation window." />
                     <LineBreak /><LineBreak />
