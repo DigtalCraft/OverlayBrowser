@@ -20,7 +20,7 @@ jobs:
     steps:
       # リポジトリのソースをWindowsビルド環境へ取得する。
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # プロジェクトが対象とする.NET 10 SDKを準備する。
       - name: Setup .NET
