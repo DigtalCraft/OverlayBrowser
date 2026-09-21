@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <!-- WPF の描画ツリーへ組み込める Chromium ブラウザを使用する。 -->
-    <PackageReference Include="CefSharp.Wpf.NETCore" Version="150.0.110" />
+    <PackageReference Include="CefSharp.Wpf.NETCore" Version="152.0.60" />
   </ItemGroup>
 
   <ItemGroup>
