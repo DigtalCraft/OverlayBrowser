@@ -1,8 +1,6 @@
 <Application x:Class="OverlayBrowser.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:OverlayBrowser"
-             StartupUri="Form/MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <!-- ViewModelの真偽値を画面部品の表示状態へ変換する。 -->
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />

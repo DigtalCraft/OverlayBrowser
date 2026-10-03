@@ -187,10 +187,10 @@ CefSharpとChromiumは複数のDLL、実行ファイル、言語ファイルを�
 
 | パッケージ | バージョン | 用途 | ライセンス |
 | --- | ---: | --- | --- |
-| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/150.0.110) | 150.0.110 | WPF用Chromiumブラウザコントロール | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
-| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/150.0.110) | 150.0.110 | CefSharp共通ランタイム | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
-| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/150.0.11) | 150.0.11 | Chromium Embedded Framework共通ランタイム | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
-| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/150.0.11) | 150.0.11 | Windows x64向けCEFネイティブファイル | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/152.0.100) | 152.0.100 | WPF用Chromiumブラウザコントロール | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/152.0.100) | 152.0.100 | CefSharp共通ランタイム | [BSDライセンス](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/152.0.10) | 152.0.10 | Chromium Embedded Framework共通ランタイム | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/152.0.10) | 152.0.10 | Windows x64向けCEFネイティブファイル | [CEFライセンス](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
 
 CefSharpはChromium Embedded Framework（CEF）を使用し、CEFはChromiumおよび複数のオープンソースコンポーネントを含みます。
 それぞれの著作権とライセンスは各権利者に帰属します。詳しくは
@@ -366,10 +366,10 @@ The project currently restores the following NuGet packages. `CefSharp.Wpf.NETCo
 
 | Package | Version | Purpose | License |
 | --- | ---: | --- | --- |
-| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/150.0.110) | 150.0.110 | Chromium browser control for WPF | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
-| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/150.0.110) | 150.0.110 | Shared CefSharp runtime | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
-| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/150.0.11) | 150.0.11 | Shared Chromium Embedded Framework runtime | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
-| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/150.0.11) | 150.0.11 | Native CEF files for Windows x64 | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [CefSharp.Wpf.NETCore](https://www.nuget.org/packages/CefSharp.Wpf.NETCore/152.0.100) | 152.0.100 | Chromium browser control for WPF | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [CefSharp.Common.NETCore](https://www.nuget.org/packages/CefSharp.Common.NETCore/152.0.100) | 152.0.100 | Shared CefSharp runtime | [BSD license](https://github.com/cefsharp/CefSharp/blob/master/LICENSE) |
+| [chromiumembeddedframework.runtime](https://www.nuget.org/packages/chromiumembeddedframework.runtime/152.0.10) | 152.0.10 | Shared Chromium Embedded Framework runtime | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
+| [chromiumembeddedframework.runtime.win-x64](https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/152.0.10) | 152.0.10 | Native CEF files for Windows x64 | [CEF license](https://github.com/chromiumembedded/cef/blob/master/LICENSE.txt) |
 
 CefSharp uses the Chromium Embedded Framework (CEF), and CEF includes Chromium and other open-source components. Their copyrights and licenses remain with their respective owners. See [CefSharp](https://github.com/cefsharp/CefSharp), 
 [CEF](https://github.com/chromiumembedded/cef), and the 

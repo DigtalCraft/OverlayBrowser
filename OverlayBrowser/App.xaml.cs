@@ -21,6 +21,7 @@ public partial class App : System.Windows.Application
     private const int DwmCaptionColor = 35;
     private const int DwmTextColor = 36;
     private readonly string applicationDirectory;
+    private SingleInstanceService? singleInstanceService;
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
@@ -30,23 +31,52 @@ public partial class App : System.Windows.Application
         int attributeSize);
 
     /// <summary>
-    /// アプリ生成時にChromiumを初期化する。
+    /// アプリ共通の画面設定を初期化する。
     /// </summary>
     public App()
     {
-        DeleteRequestedBrowserData();
-
         EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(Window_Loaded));
 
         applicationDirectory = GetApplicationDirectory();
+    }
+
+    /// <summary>
+    /// 2つ目の起動は既存画面へ依頼を渡し、Chromiumを重複起動させない。
+    /// </summary>
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        DeleteRequestedBrowserData();
+
         var startedFromWindows = Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(
                 argument,
                 WindowsStartupService.StartupArgument,
                 StringComparison.OrdinalIgnoreCase));
+        var launchTarget = e.Args.FirstOrDefault(argument =>
+            !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase) &&
+            !argument.StartsWith(ClearBrowserDataArgumentPrefix, StringComparison.OrdinalIgnoreCase) &&
+            !argument.StartsWith(WaitForParentArgumentPrefix, StringComparison.OrdinalIgnoreCase));
+
+        singleInstanceService = new SingleInstanceService();
+        if (!singleInstanceService.TryAcquire())
+        {
+            if (!startedFromWindows && !singleInstanceService.TrySend(launchTarget))
+            {
+                MessageBox.Show(
+                    "起動済みの画面を開けませんでした。タスクトレイから開いてください。",
+                    "Overlay Browser",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+
+            Shutdown();
+            return;
+        }
+
         WriteStartupLog(
             applicationDirectory,
             startedFromWindows ? "Windows自動起動を開始" : "通常起動を開始");
@@ -54,10 +84,23 @@ public partial class App : System.Windows.Application
         if (startedFromWindows)
         {
             WriteStartupLog(applicationDirectory, "Chromium初期化を画面表示時まで保留");
+        }
+        else if (!EnsureChromiumInitialized())
+        {
             return;
         }
 
-        EnsureChromiumInitialized();
+        singleInstanceService.StartListening(target => Dispatcher.BeginInvoke(() =>
+        {
+            if (MainWindow is Form.MainWindow window)
+            {
+                window.OpenFromSecondLaunch(target);
+            }
+        }));
+
+        var mainWindow = new Form.MainWindow();
+        MainWindow = mainWindow;
+        mainWindow.Show();
     }
 
     /// <summary>
@@ -275,6 +318,7 @@ public partial class App : System.Windows.Application
     /// <param name="e">終了時の引数。</param>
     protected override void OnExit(ExitEventArgs e)
     {
+        singleInstanceService?.Dispose();
         if (Cef.IsInitialized == true)
         {
             Cef.Shutdown();

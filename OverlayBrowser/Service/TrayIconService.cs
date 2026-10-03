@@ -50,7 +50,13 @@ public sealed class TrayIconService : IDisposable
             ContextMenuStrip = contextMenu,
             Visible = true
         };
-        notifyIcon.DoubleClick += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
+        notifyIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                ShowRequested?.Invoke(this, EventArgs.Empty);
+            }
+        };
     }
 
     /// <summary>

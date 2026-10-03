@@ -632,7 +632,7 @@ public partial class MainWindow : Window
     /// <param name="e">トレイ操作のイベント情報。</param>
     private void TrayIconService_ShowRequested(object? sender, EventArgs e)
     {
-        Dispatcher.BeginInvoke(ShowWindowFromTray);
+        Dispatcher.BeginInvoke(() => ShowWindowFromTray());
     }
 
     /// <summary>
@@ -652,7 +652,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// 非表示のメイン画面をタスクトレイから復元する。
     /// </summary>
-    private void ShowWindowFromTray()
+    private void ShowWindowFromTray(string? initialAddress = null)
     {
         ShowInTaskbar = true;
         if (!IsVisible)
@@ -666,7 +666,22 @@ public partial class MainWindow : Window
         }
 
         Activate();
-        CreateInitialBrowserTab();
+        CreateInitialBrowserTab(initialAddress);
+    }
+
+    /// <summary>
+    /// デスクトップなどから再度起動された時、既存画面で指定先を開く。
+    /// </summary>
+    /// <param name="target">起動引数で指定されたURLまたはファイルパス。</param>
+    public void OpenFromSecondLaunch(string? target)
+    {
+        var hadTabs = browserTabs.Count > 0;
+        var hasAddress = UrlHelper.TryCreateBrowserAddress(target, out var address);
+        ShowWindowFromTray(hasAddress ? address : null);
+        if (hadTabs && hasAddress)
+        {
+            CreateBrowserTab(address);
+        }
     }
 
     /// <summary>
@@ -675,7 +690,7 @@ public partial class MainWindow : Window
     /// Windows自動起動時はCEFのブラウザ生成を遅らせ、
     /// タスクトレイから画面を表示した時に初めて作成する。
     /// </summary>
-    private void CreateInitialBrowserTab()
+    private void CreateInitialBrowserTab(string? initialAddress = null)
     {
         if (browserTabs.Count > 0)
         {
@@ -687,7 +702,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        CreateBrowserTab(viewModel.GetStartupAddress(launchTarget));
+        CreateBrowserTab(viewModel.GetStartupAddress(initialAddress ?? launchTarget));
     }
 
     /// <summary>
