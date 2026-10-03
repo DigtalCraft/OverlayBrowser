@@ -44,38 +44,31 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// 2つ目の起動は既存画面へ依頼を渡し、Chromiumを重複起動させない。
+    /// 二重起動をChromiumの初期化前に止め、アプリ専用の案内を表示する。
     /// </summary>
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        DeleteRequestedBrowserData();
+        WaitForRequestedParent();
 
         var startedFromWindows = Environment.GetCommandLineArgs().Any(argument =>
             string.Equals(
                 argument,
                 WindowsStartupService.StartupArgument,
                 StringComparison.OrdinalIgnoreCase));
-        var launchTarget = e.Args.FirstOrDefault(argument =>
-            !string.Equals(argument, WindowsStartupService.StartupArgument, StringComparison.OrdinalIgnoreCase) &&
-            !argument.StartsWith(ClearBrowserDataArgumentPrefix, StringComparison.OrdinalIgnoreCase) &&
-            !argument.StartsWith(WaitForParentArgumentPrefix, StringComparison.OrdinalIgnoreCase));
-
         singleInstanceService = new SingleInstanceService();
-        if (!singleInstanceService.TryAcquire())
+        if (!singleInstanceService.TryAcquire() || SingleInstanceService.HasEarlierInstance())
         {
-            if (!startedFromWindows && !singleInstanceService.TrySend(launchTarget))
+            if (!startedFromWindows)
             {
-                MessageBox.Show(
-                    "起動済みの画面を開けませんでした。タスクトレイから開いてください。",
-                    "Overlay Browser",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                ShowStartupMessage("Overlay Browser", "２重起動はできません。\n起動中のアプリはタスクトレイから開いてください。");
             }
 
             Shutdown();
             return;
         }
+
+        DeleteRequestedBrowserData();
 
         WriteStartupLog(
             applicationDirectory,
@@ -89,14 +82,6 @@ public partial class App : System.Windows.Application
         {
             return;
         }
-
-        singleInstanceService.StartListening(target => Dispatcher.BeginInvoke(() =>
-        {
-            if (MainWindow is Form.MainWindow window)
-            {
-                window.OpenFromSecondLaunch(target);
-            }
-        }));
 
         var mainWindow = new Form.MainWindow();
         MainWindow = mainWindow;
@@ -120,6 +105,7 @@ public partial class App : System.Windows.Application
         var cefSettings = new CefSettings
         {
             CachePath = Path.Combine(applicationDirectory, "CefSharpCache"),
+            RootCachePath = Path.Combine(applicationDirectory, "CefSharpCache"),
             LogFile = Path.Combine(applicationDirectory, "cef.log"),
             LogSeverity = LogSeverity.Warning,
             AcceptLanguageList = "ja-JP,ja,en-US,en",
@@ -128,20 +114,61 @@ public partial class App : System.Windows.Application
         };
 
         WriteStartupLog(applicationDirectory, "Chromium初期化を開始");
-        if (!Cef.Initialize(cefSettings, performDependencyCheck: true, browserProcessHandler: null))
+        bool initialized;
+        try
+        {
+            initialized = Cef.Initialize(cefSettings, performDependencyCheck: true,
+                browserProcessHandler: new OverlayBrowserProcessHandler(() =>
+                    Dispatcher.BeginInvoke(() => ShowStartupMessage("Overlay Browser", "２重起動はできません。"))));
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or DllNotFoundException or BadImageFormatException)
+        {
+            WriteStartupLog(applicationDirectory, $"Chromium初期化の例外: {exception.Message}");
+            initialized = false;
+        }
+
+        if (!initialized)
         {
             WriteStartupLog(applicationDirectory, "Chromium初期化に失敗");
-            MessageBox.Show(
-                "Chromiumブラウザを初期化できませんでした。アプリを再起動してください。",
+            ShowStartupMessage(
                 "ブラウザの準備ができません",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Chromiumブラウザを初期化できませんでした。アプリを再起動してください。");
             Shutdown(1);
             return false;
         }
 
         WriteStartupLog(applicationDirectory, "Chromium初期化が完了");
         return true;
+    }
+
+    /// <summary>
+    /// Chromiumを使わない専用画面で、起動時の案内を最前面に表示する。
+    /// </summary>
+    private void ShowStartupMessage(string title, string message)
+    {
+        var previousShutdownMode = ShutdownMode;
+        // メイン画面を作る前に案内を閉じても、終了処理が途中で走らないようにする。
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var dialog = new Form.TranslationMessageWindow(title, message)
+            {
+                Topmost = true,
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen
+            };
+            if (MainWindow is { IsVisible: true } owner)
+            {
+                dialog.Owner = owner;
+                dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            }
+
+            dialog.ShowDialog();
+        }
+        finally
+        {
+            ShutdownMode = previousShutdownMode;
+        }
     }
 
     /// <summary>
@@ -193,14 +220,6 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var parentArgument = arguments.FirstOrDefault(argument =>
-            argument.StartsWith(WaitForParentArgumentPrefix, StringComparison.OrdinalIgnoreCase));
-        if (parentArgument is not null &&
-            int.TryParse(parentArgument[WaitForParentArgumentPrefix.Length..], out var parentProcessId))
-        {
-            WaitForParentProcess(parentProcessId);
-        }
-
         var profileDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "OverlayBrowser",
@@ -220,12 +239,30 @@ public partial class App : System.Windows.Application
 
         if (!deleteSucceeded)
         {
-            MessageBox.Show(
-                "対象のブラウザデータを削除できませんでした。アプリを終了してから手動で削除してください。",
-                "データの削除",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            ((App)Current).ShowStartupMessage("データの削除",
+                "対象のブラウザデータを削除できませんでした。アプリを終了してから手動で削除してください。");
         }
+    }
+
+    /// <summary>
+    /// データ削除のための再起動では、二重起動判定より先に元のアプリの終了を待つ。
+    /// </summary>
+    private static void WaitForRequestedParent()
+    {
+        var arguments = Environment.GetCommandLineArgs();
+        if (!arguments.Any(argument => argument.StartsWith(ClearBrowserDataArgumentPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var parentArgument = arguments.FirstOrDefault(argument =>
+            argument.StartsWith(WaitForParentArgumentPrefix, StringComparison.OrdinalIgnoreCase));
+        if (parentArgument is not null &&
+            int.TryParse(parentArgument[WaitForParentArgumentPrefix.Length..], out var parentProcessId))
+        {
+            WaitForParentProcess(parentProcessId);
+        }
+
     }
 
     /// <summary>
@@ -318,11 +355,12 @@ public partial class App : System.Windows.Application
     /// <param name="e">終了時の引数。</param>
     protected override void OnExit(ExitEventArgs e)
     {
-        singleInstanceService?.Dispose();
         if (Cef.IsInitialized == true)
         {
             Cef.Shutdown();
         }
+
+        singleInstanceService?.Dispose();
 
         base.OnExit(e);
     }

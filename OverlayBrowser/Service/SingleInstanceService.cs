@@ -1,17 +1,15 @@
-using System.IO;
-using System.IO.Pipes;
-using System.Text.Json;
+using System.ComponentModel;
+using System.Diagnostics;
 
 namespace OverlayBrowser.Service;
 
 /// <summary>
-/// 同じWindowsセッションで起動するアプリを1つに制限し、後からの起動要求を渡す。
+/// 同じWindowsセッションで起動するアプリを1つに制限する。
 /// </summary>
 public sealed class SingleInstanceService : IDisposable
 {
     private const string MutexName = @"Local\OverlayBrowser.SingleInstance";
     private readonly Mutex mutex = new(false, MutexName);
-    private readonly CancellationTokenSource cancellation = new();
     private bool ownsMutex;
 
     /// <summary>
@@ -32,84 +30,51 @@ public sealed class SingleInstanceService : IDisposable
     }
 
     /// <summary>
-    /// 最初のプロセスへ画面表示と起動対象を依頼する。
+    /// Mutexを持たない旧バージョンが更新前から動いている場合も検出する。
     /// </summary>
-    public bool TrySend(string? launchTarget)
+    public static bool HasEarlierInstance()
     {
-        try
+        using var current = Process.GetCurrentProcess();
+        foreach (var name in new[] { "OverlayBrowser", "GameOverlayBrowser" })
         {
-            using var client = new NamedPipeClientStream(
-                ".", GetPipeName(), PipeDirection.Out, PipeOptions.CurrentUserOnly);
-            client.Connect(3000);
-            using var writer = new StreamWriter(client);
-            writer.WriteLine(JsonSerializer.Serialize(launchTarget));
-            return true;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// 後から起動したプロセスの依頼を受け取る。
-    /// </summary>
-    public void StartListening(Action<string?> onOpenRequested)
-    {
-        _ = Task.Run(async () =>
-        {
-            while (!cancellation.IsCancellationRequested)
+            foreach (var process in Process.GetProcessesByName(name))
             {
-                try
+                using (process)
                 {
-                    using var server = new NamedPipeServerStream(
-                        GetPipeName(), PipeDirection.In, 1,
-                        PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                    await server.WaitForConnectionAsync(cancellation.Token);
-                    using var reader = new StreamReader(server);
-                    var request = await reader.ReadLineAsync(cancellation.Token);
-                    if (request is not null)
+                    try
                     {
-                        onOpenRequested(JsonSerializer.Deserialize<string?>(request));
+                        // 同時起動で後から来たプロセスを先行プロセスと誤認しない。
+                        if (process.Id != current.Id && process.SessionId == current.SessionId &&
+                            process.StartTime <= current.StartTime)
+                        {
+                            return true;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // 調査中に終了したプロセスは対象外。
+                    }
+                    catch (Win32Exception)
+                    {
+                        // 別の権限で保護されているプロセスは読み取れない。
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (IOException)
-                {
-                    // 送信側が途中で終了しても、次の起動要求を受け付ける。
-                }
-                catch (JsonException)
-                {
-                    // 不正な起動要求は破棄し、待ち受けを継続する。
-                }
             }
-        });
+        }
+
+        return false;
     }
 
     /// <summary>
-    /// 待ち受けを止め、アプリの占有を解除する。
+    /// アプリの占有を解除する。
     /// </summary>
     public void Dispose()
     {
-        cancellation.Cancel();
-        cancellation.Dispose();
         if (ownsMutex)
         {
             mutex.ReleaseMutex();
         }
 
         mutex.Dispose();
-    }
-
-    private static string GetPipeName()
-    {
-        return $"OverlayBrowser.SingleInstance.{System.Diagnostics.Process.GetCurrentProcess().SessionId}";
     }
 }

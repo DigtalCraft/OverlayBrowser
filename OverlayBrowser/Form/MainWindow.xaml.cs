@@ -670,21 +670,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// デスクトップなどから再度起動された時、既存画面で指定先を開く。
-    /// </summary>
-    /// <param name="target">起動引数で指定されたURLまたはファイルパス。</param>
-    public void OpenFromSecondLaunch(string? target)
-    {
-        var hadTabs = browserTabs.Count > 0;
-        var hasAddress = UrlHelper.TryCreateBrowserAddress(target, out var address);
-        ShowWindowFromTray(hasAddress ? address : null);
-        if (hadTabs && hasAddress)
-        {
-            CreateBrowserTab(address);
-        }
-    }
-
-    /// <summary>
     /// 初回表示に必要なブラウザタブを作成する。
     ///
     /// Windows自動起動時はCEFのブラウザ生成を遅らせ、
